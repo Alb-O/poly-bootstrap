@@ -12,16 +12,29 @@ let
     if lib.hasPrefix "/" cfg.localInputOverrides.sourcePath
     then cfg.localInputOverrides.sourcePath
     else "${config.devenv.root}/${cfg.localInputOverrides.sourcePath}";
+  # Collect local repo names during evaluation because runCommand executes in a
+  # sandbox and cannot reliably stat host paths under reposRoot.
+  localInputOverridesReposEntries =
+    if builtins.pathExists localInputOverridesReposRoot
+    then builtins.readDir localInputOverridesReposRoot
+    else {};
+  localInputOverridesRepoNames = lib.filter (
+    repoName: builtins.getAttr repoName localInputOverridesReposEntries == "directory"
+  ) (builtins.attrNames localInputOverridesReposEntries);
   localInputOverridesText =
     if builtins.pathExists localInputOverridesSourcePath
     then builtins.readFile (pkgs.runCommand "materialized-local-input-overrides.yaml" {
       nativeBuildInputs = [ pythonWithYaml ];
-      passAsFile = [ "sourceYaml" ];
+      passAsFile = [
+        "sourceYaml"
+        "repoNamesJson"
+      ];
       sourceYaml = builtins.readFile localInputOverridesSourcePath;
+      repoNamesJson = builtins.toJSON localInputOverridesRepoNames;
       reposRoot = localInputOverridesReposRoot;
       urlScheme = cfg.localInputOverrides.urlScheme;
     } ''
-      python3 ${localInputOverridesScript} "$sourceYamlPath" "$reposRoot" "$urlScheme" > "$out"
+      python3 ${localInputOverridesScript} "$sourceYamlPath" "$repoNamesJsonPath" "$reposRoot" "$urlScheme" > "$out"
     '')
     else "";
 in

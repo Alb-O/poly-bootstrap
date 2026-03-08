@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import os
 import sys
 
@@ -42,8 +43,24 @@ def read_input_spec(input_spec):
     return None, None
 
 
+def read_local_repo_names(repo_names_json_path):
+    with open(repo_names_json_path, "r", encoding="utf-8") as handle:
+        parsed = json.load(handle) or []
+
+    if not isinstance(parsed, list):
+        raise SystemExit("expected local repo names JSON to be a list")
+
+    names = set()
+    for item in parsed:
+        if isinstance(item, str) and item:
+            names.add(item)
+
+    return names
+
+
 def main() -> int:
-    source_yaml_path, repos_root, url_scheme = sys.argv[1:4]
+    source_yaml_path, local_repo_names_path, repos_root, url_scheme = sys.argv[1:5]
+    local_repo_names = read_local_repo_names(local_repo_names_path)
     url_prefix = "git+file:" if url_scheme == "git+file" else "path:"
 
     overrides = {}
@@ -58,10 +75,12 @@ def main() -> int:
         if not repo_name:
             continue
 
-        local_repo_path = os.path.join(repos_root, repo_name)
-        if not os.path.isdir(local_repo_path):
+        # Names are passed from eval-time readDir; do not check os.path.isdir()
+        # here because this script runs in a sandboxed build environment.
+        if repo_name not in local_repo_names:
             continue
 
+        local_repo_path = os.path.join(repos_root, repo_name)
         copied_spec["url"] = f"{url_prefix}{local_repo_path}"
         overrides[str(input_name)] = copied_spec
 
