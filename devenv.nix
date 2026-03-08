@@ -3,11 +3,11 @@
 let
   cfg = config.materializer;
   pythonWithYaml = pkgs.python3.withPackages (ps: [ ps.pyyaml ]);
-  localInputOverridesScript = ./scripts/materialize_local_input_overrides.py;
+  localInputOverridesScript = ./env-local-overrides.py;
   localInputOverridesReposRoot =
     if cfg.localInputOverrides.reposRoot != null
     then cfg.localInputOverrides.reposRoot
-    else builtins.dirOf config.devenv.root;
+    else dirOf config.devenv.root;
   localInputOverridesSourcePath =
     if lib.hasPrefix "/" cfg.localInputOverrides.sourcePath
     then cfg.localInputOverrides.sourcePath
