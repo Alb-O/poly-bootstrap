@@ -18,22 +18,15 @@ let
       nativeBuildInputs = [ pythonWithYaml ];
       passAsFile = [ "sourceYaml" ];
       sourceYaml = builtins.readFile localInputOverridesSourcePath;
-      matchPattern = cfg.localInputOverrides.matchPattern;
       reposRoot = localInputOverridesReposRoot;
       urlScheme = cfg.localInputOverrides.urlScheme;
     } ''
-      python3 ${localInputOverridesScript} "$sourceYamlPath" "$matchPattern" "$reposRoot" "$urlScheme" > "$out"
+      python3 ${localInputOverridesScript} "$sourceYamlPath" "$reposRoot" "$urlScheme" > "$out"
     '')
     else "";
 in
 {
   options.materializer.localInputOverrides = {
-    matchPattern = lib.mkOption {
-      type = lib.types.str;
-      default = "Alb-O";
-      description = "Substring used to match input URLs eligible for local repo overrides.";
-    };
-
     reposRoot = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;

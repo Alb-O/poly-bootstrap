@@ -1,7 +1,8 @@
 # Local Input Overrides
 
 Reusable `devenv` module that generates `devenv.local.yaml` with local path overrides
-for matching inputs in `devenv.yaml`.
+for inputs in `devenv.yaml` whose remote repo name matches a local directory name
+under `materializer.localInputOverrides.reposRoot`.
 
 ## Includes
 

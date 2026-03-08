@@ -43,7 +43,7 @@ def read_input_spec(input_spec):
 
 
 def main() -> int:
-    source_yaml_path, pattern, repos_root, url_scheme = sys.argv[1:5]
+    source_yaml_path, repos_root, url_scheme = sys.argv[1:4]
     url_prefix = "git+file:" if url_scheme == "git+file" else "path:"
 
     overrides = {}
@@ -51,14 +51,18 @@ def main() -> int:
     for input_name, input_spec in get_inputs_block(source_yaml_path).items():
         input_url, copied_spec = read_input_spec(input_spec)
 
-        if input_url is None or pattern not in input_url:
+        if input_url is None:
             continue
 
         repo_name = repo_name_from_url(input_url)
         if not repo_name:
             continue
 
-        copied_spec["url"] = f"{url_prefix}{os.path.join(repos_root, repo_name)}"
+        local_repo_path = os.path.join(repos_root, repo_name)
+        if not os.path.isdir(local_repo_path):
+            continue
+
+        copied_spec["url"] = f"{url_prefix}{local_repo_path}"
         overrides[str(input_name)] = copied_spec
 
     if not overrides:
