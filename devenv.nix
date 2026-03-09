@@ -1,9 +1,9 @@
 { pkgs, config, lib, ... }:
 
 let
-  cfg = config.materializer;
+  cfg = config.composer;
   pythonWithYaml = pkgs.python3.withPackages (ps: [ ps.pyyaml ]);
-  localInputOverridesScript = ./env-local-overrides.py;
+  localInputOverridesScript = ./dvnv-local-inputs.py;
   localInputOverridesReposRoot =
     if cfg.localInputOverrides.reposRoot != null
     then cfg.localInputOverrides.reposRoot
@@ -23,7 +23,7 @@ let
   ) (builtins.attrNames localInputOverridesReposEntries);
   localInputOverridesText =
     if builtins.pathExists localInputOverridesSourcePath
-    then builtins.readFile (pkgs.runCommand "materialized-local-input-overrides.yaml" {
+    then builtins.readFile (pkgs.runCommand "local-input-overrides.yaml" {
       nativeBuildInputs = [ pythonWithYaml ];
       passAsFile = [
         "sourceYaml"
@@ -39,7 +39,7 @@ let
     else "";
 in
 {
-  options.materializer.localInputOverrides = {
+  options.composer.localInputOverrides = {
     reposRoot = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -67,6 +67,6 @@ in
 
   config = lib.mkIf (localInputOverridesText != "") {
     files."${cfg.localInputOverrides.outputPath}".text = localInputOverridesText;
-    outputs.materialized_local_input_overrides = pkgs.writeText "devenv-local-input-overrides.yaml" localInputOverridesText;
+    outputs.local_input_overrides = pkgs.writeText "local-input-overrides.yaml" localInputOverridesText;
   };
 }
