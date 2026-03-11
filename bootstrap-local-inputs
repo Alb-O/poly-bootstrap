@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="${1:-.}"
+output_path="$repo_root/devenv.local.yaml"
+
+run_sync() {
+  if python3 -c 'import yaml' >/dev/null 2>&1; then
+    python3 "$script_dir/dvnv-local-inputs.py" sync "$@"
+  else
+    nix --extra-experimental-features 'nix-command flakes' \
+      shell "path:${script_dir}/bootstrap#pyyaml" \
+      -c python3 "$script_dir/dvnv-local-inputs.py" sync "$@"
+  fi
+}
+
+before_hash="__missing__"
+if [ -f "$output_path" ]; then
+  before_hash="$(sha256sum "$output_path")"
+fi
+
+run_sync "$@"
+
+after_hash="__missing__"
+if [ -f "$output_path" ]; then
+  after_hash="$(sha256sum "$output_path")"
+fi
+
+if [ "$before_hash" != "$after_hash" ]; then
+  (
+    cd "$repo_root"
+    devenv update >/dev/null
+  )
+fi
