@@ -76,6 +76,27 @@ def read_repo_sources(repo_sources_json_path):
     return repo_sources
 
 
+def read_name_filter(json_path, label):
+    with open(json_path, "r", encoding="utf-8") as handle:
+        parsed = json.load(handle) or []
+
+    if not isinstance(parsed, list):
+        fail(f"expected {label} JSON to be a list")
+
+    names = set()
+    for item in parsed:
+        if isinstance(item, str) and item:
+            names.add(item)
+
+    return names
+
+
+def fail_on_overlap(first_names, second_names, first_label, second_label):
+    overlap = sorted(first_names & second_names)
+    if overlap:
+        fail(f"{first_label} and {second_label} must not overlap: {', '.join(overlap)}")
+
+
 def add_override(overrides, input_name, copied_spec, source_label):
     existing_spec = overrides.get(input_name)
     if existing_spec is None:
@@ -88,7 +109,15 @@ def add_override(overrides, input_name, copied_spec, source_label):
         )
 
 
-def build_overrides(source_yaml_text, local_repo_names, repo_sources, repos_root, url_scheme):
+def build_overrides(
+    source_yaml_text,
+    local_repo_names,
+    repo_sources,
+    include_inputs,
+    exclude_inputs,
+    repos_root,
+    url_scheme,
+):
     url_prefix = "git+file:" if url_scheme == "git+file" else "path:"
 
     overrides = {}
@@ -101,6 +130,12 @@ def build_overrides(source_yaml_text, local_repo_names, repo_sources, repos_root
         for input_name, input_spec in get_inputs_block(
             source_label, pending_yaml_text
         ).items():
+            input_name = str(input_name)
+            if include_inputs and input_name not in include_inputs:
+                continue
+            if input_name in exclude_inputs:
+                continue
+
             input_url, copied_spec = read_input_spec(input_spec)
 
             if input_url is None:
@@ -112,7 +147,7 @@ def build_overrides(source_yaml_text, local_repo_names, repo_sources, repos_root
 
             local_repo_path = os.path.join(repos_root, repo_name)
             copied_spec["url"] = f"{url_prefix}{local_repo_path}"
-            add_override(overrides, str(input_name), copied_spec, source_label)
+            add_override(overrides, input_name, copied_spec, source_label)
 
             if repo_name in visited_repo_names:
                 continue
@@ -139,16 +174,31 @@ def render_overrides_text(overrides):
 
 
 def run_generator_mode(
-    source_yaml_path, local_repo_names_path, repo_sources_json_path, repos_root, url_scheme
+    source_yaml_path,
+    local_repo_names_path,
+    repo_sources_json_path,
+    include_inputs_json_path,
+    exclude_inputs_json_path,
+    repos_root,
+    url_scheme,
 ):
     local_repo_names = read_local_repo_names(local_repo_names_path)
     repo_sources = read_repo_sources(repo_sources_json_path)
+    include_inputs = read_name_filter(include_inputs_json_path, "included inputs")
+    exclude_inputs = read_name_filter(exclude_inputs_json_path, "excluded inputs")
+    fail_on_overlap(include_inputs, exclude_inputs, "included inputs", "excluded inputs")
 
     with open(source_yaml_path, "r", encoding="utf-8") as handle:
         source_yaml_text = handle.read()
 
     overrides = build_overrides(
-        source_yaml_text, local_repo_names, repo_sources, repos_root, url_scheme
+        source_yaml_text,
+        local_repo_names,
+        repo_sources,
+        include_inputs,
+        exclude_inputs,
+        repos_root,
+        url_scheme,
     )
     sys.stdout.write(render_overrides_text(overrides))
     return 0
@@ -172,11 +222,23 @@ def maybe_relativize(path, root):
     return None
 
 
-def sync_local_overrides(repo_root, source_path, output_path, repos_root, url_scheme):
+def sync_local_overrides(
+    repo_root,
+    source_path,
+    output_path,
+    repos_root,
+    url_scheme,
+    include_repos,
+    exclude_repos,
+    include_inputs,
+    exclude_inputs,
+):
     repo_root = os.path.realpath(repo_root)
     source_yaml_path = resolve_repo_path(repo_root, source_path)
     output_yaml_path = resolve_repo_path(repo_root, output_path)
     repos_root = os.path.realpath(repos_root)
+    fail_on_overlap(include_repos, exclude_repos, "included repos", "excluded repos")
+    fail_on_overlap(include_inputs, exclude_inputs, "included inputs", "excluded inputs")
 
     with open(source_yaml_path, "r", encoding="utf-8") as handle:
         source_yaml_text = handle.read()
@@ -187,6 +249,9 @@ def sync_local_overrides(repo_root, source_path, output_path, repos_root, url_sc
         for entry in os.listdir(repos_root)
         if os.path.isdir(os.path.join(repos_root, entry))
     }
+    if include_repos:
+        repo_names = {entry for entry in repo_names if entry in include_repos}
+    repo_names = {entry for entry in repo_names if entry not in exclude_repos}
 
     repo_sources = {}
     if source_relative_path is not None:
@@ -197,7 +262,13 @@ def sync_local_overrides(repo_root, source_path, output_path, repos_root, url_sc
                     repo_sources[repo_name] = handle.read()
 
     overrides = build_overrides(
-        source_yaml_text, repo_names, repo_sources, repos_root, url_scheme
+        source_yaml_text,
+        repo_names,
+        repo_sources,
+        include_inputs,
+        exclude_inputs,
+        repos_root,
+        url_scheme,
     )
     overrides_text = render_overrides_text(overrides)
 
@@ -221,7 +292,7 @@ def sync_local_overrides(repo_root, source_path, output_path, repos_root, url_sc
 
 
 def parse_args(argv):
-    if len(argv) == 5:
+    if len(argv) == 7:
         return ("generate", argv)
 
     parser = argparse.ArgumentParser(
@@ -235,6 +306,10 @@ def parse_args(argv):
     sync_parser.add_argument("--output-path", default="devenv.local.yaml")
     sync_parser.add_argument("--repos-root")
     sync_parser.add_argument("--url-scheme", choices=["path", "git+file"], default="path")
+    sync_parser.add_argument("--include-repo", action="append", default=[])
+    sync_parser.add_argument("--exclude-repo", action="append", default=[])
+    sync_parser.add_argument("--include-input", action="append", default=[])
+    sync_parser.add_argument("--exclude-input", action="append", default=[])
 
     return ("cli", parser.parse_args(argv))
 
@@ -243,13 +318,21 @@ def main():
     mode, parsed = parse_args(sys.argv[1:])
 
     if mode == "generate":
-        source_yaml_path, local_repo_names_path, repo_sources_json_path, repos_root, url_scheme = (
-            parsed
-        )
+        (
+            source_yaml_path,
+            local_repo_names_path,
+            repo_sources_json_path,
+            include_inputs_json_path,
+            exclude_inputs_json_path,
+            repos_root,
+            url_scheme,
+        ) = parsed
         return run_generator_mode(
             source_yaml_path,
             local_repo_names_path,
             repo_sources_json_path,
+            include_inputs_json_path,
+            exclude_inputs_json_path,
             repos_root,
             url_scheme,
         )
@@ -266,6 +349,10 @@ def main():
         parsed.output_path,
         repos_root,
         parsed.url_scheme,
+        set(parsed.include_repo),
+        set(parsed.exclude_repo),
+        set(parsed.include_input),
+        set(parsed.exclude_input),
     )
 
 

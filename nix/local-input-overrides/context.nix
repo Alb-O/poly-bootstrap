@@ -3,6 +3,8 @@
 let
   cfg = config.composer.localInputOverrides;
   currentRoot = toString config.devenv.root;
+  includeRepos = lib.unique cfg.includeRepos;
+  excludeRepos = lib.unique cfg.excludeRepos;
   reposRoot =
     if cfg.reposRoot != null
     then cfg.reposRoot
@@ -16,9 +18,14 @@ let
     if builtins.pathExists reposRoot
     then builtins.readDir reposRoot
     else { };
-  repoNames = lib.filter (
+  allRepoNames = lib.filter (
     repoName: builtins.getAttr repoName repoEntries == "directory"
   ) (builtins.attrNames repoEntries);
+  repoNames = lib.filter (
+    repoName:
+    (includeRepos == [ ] || builtins.elem repoName includeRepos)
+    && !(builtins.elem repoName excludeRepos)
+  ) allRepoNames;
   # Keep recursive scans repo-relative; unrelated absolute paths stay disabled.
   sourceRelativePath =
     if lib.hasPrefix "${currentRoot}/" sourcePath then

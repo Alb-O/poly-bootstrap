@@ -14,6 +14,15 @@ overrides for both `B` and `C`.
 - Materialized file: `devenv.local.yaml` (configurable)
 - Output: `outputs.local_input_overrides`
 
+## Options
+
+- `reposRoot`: base directory containing local repos
+- `sourcePath`: source YAML to scan for inputs
+- `outputPath`: generated override file path
+- `urlScheme`: generated override URL scheme
+- `includeRepos` / `excludeRepos`: repo directory filters
+- `includeInputs` / `excludeInputs`: input name filters
+
 ## Notes
 
 - Recursive scanning reuses the same `sourcePath` inside each local repo.
@@ -49,4 +58,9 @@ inputs:
     flake: false
 imports:
   - dvnv-local-inputs
+
+composer.localInputOverrides = {
+  excludeRepos = [ "big-experimental-repo" ];
+  includeInputs = [ "agent-scripts" "dvnv-docs-env" ];
+};
 ```

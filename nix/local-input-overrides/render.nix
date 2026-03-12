@@ -20,11 +20,15 @@ in
           "sourceYaml"
           "repoNamesJson"
           "repoSourcesJson"
+          "includeInputsJson"
+          "excludeInputsJson"
         ];
         # Pass larger YAML/JSON payloads via files instead of shell-escaped env.
         sourceYaml = builtins.readFile sourcePath;
         repoNamesJson = builtins.toJSON repoNames;
         repoSourcesJson = builtins.toJSON repoSources;
+        includeInputsJson = builtins.toJSON cfg.includeInputs;
+        excludeInputsJson = builtins.toJSON cfg.excludeInputs;
         reposRoot = reposRoot;
         urlScheme = cfg.urlScheme;
       } ''
@@ -32,6 +36,8 @@ in
           "$sourceYamlPath" \
           "$repoNamesJsonPath" \
           "$repoSourcesJsonPath" \
+          "$includeInputsJsonPath" \
+          "$excludeInputsJsonPath" \
           "$reposRoot" \
           "$urlScheme" \
           > "$out"
