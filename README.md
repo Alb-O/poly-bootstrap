@@ -69,8 +69,8 @@ composer.localInputOverrides = {
 
 ## Global Defaults
 
-Create `${reposRoot}/.devenv-global-inputs.yaml` to define local-input defaults
-once for the whole polyrepo:
+Create `${reposRoot}/.devenv-global-inputs.yaml` to define shared defaults once
+for the whole polyrepo:
 
 ```yaml
 inputs:
@@ -80,6 +80,8 @@ inputs:
   dvnv-docs-env:
     url: github:Alb-O/dvnv-docs-env
     flake: false
+imports:
+  - agent-scripts
 ```
 
 Rules:
@@ -87,3 +89,4 @@ Rules:
 - consumer-declared inputs in `devenv.yaml` win on name collisions
 - global defaults still participate in local-path resolution
 - transitive scanning also applies to matching global defaults
+- shared imports are only emitted when the input exists after merging

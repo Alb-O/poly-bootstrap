@@ -13,6 +13,14 @@ def fail(message):
     raise SystemExit(message)
 
 
+def parse_top_level_mapping(source_label, yaml_text):
+    parsed = yaml.safe_load(yaml_text) or {}
+    if not isinstance(parsed, dict):
+        fail(f"expected a top-level mapping in {source_label}")
+
+    return parsed
+
+
 def repo_name_from_url(url):
     cleaned = url.split("?", 1)[0].split("#", 1)[0].removeprefix("git+")
 
@@ -27,10 +35,7 @@ def repo_name_from_url(url):
 
 
 def get_inputs_block(source_label, yaml_text):
-    parsed = yaml.safe_load(yaml_text) or {}
-    if not isinstance(parsed, dict):
-        fail(f"expected a top-level mapping in {source_label}")
-
+    parsed = parse_top_level_mapping(source_label, yaml_text)
     inputs_block = parsed.get("inputs", {}) or {}
     if not isinstance(inputs_block, dict):
         fail(f"expected `inputs` to be a mapping in {source_label}")
@@ -40,6 +45,21 @@ def get_inputs_block(source_label, yaml_text):
 
 def get_input_names(source_label, yaml_text):
     return {str(input_name) for input_name in get_inputs_block(source_label, yaml_text)}
+
+
+def get_imports_list(source_label, yaml_text):
+    parsed = parse_top_level_mapping(source_label, yaml_text)
+    imports_list = parsed.get("imports", []) or []
+    if not isinstance(imports_list, list):
+        fail(f"expected `imports` to be a list in {source_label}")
+
+    names = []
+    for item in imports_list:
+        if not isinstance(item, str) or not item:
+            fail(f"expected `imports` entries to be non-empty strings in {source_label}")
+        names.append(item)
+
+    return names
 
 
 def read_input_spec(input_spec):
@@ -115,6 +135,11 @@ def add_override(overrides, input_name, copied_spec, source_label):
         )
 
 
+def append_unique_name(names, name):
+    if name not in names:
+        names.append(name)
+
+
 def build_overrides(
     source_yaml_text,
     global_inputs_yaml_text,
@@ -128,10 +153,15 @@ def build_overrides(
     url_prefix = "git+file:" if url_scheme == "git+file" else "path:"
 
     overrides = {}
+    rendered_imports = []
     visited_repo_names = set()
     root_input_names = get_input_names("root source", source_yaml_text)
+    global_imports = []
     pending_sources = [("root source", source_yaml_text, set())]
     if global_inputs_yaml_text:
+        global_imports = get_imports_list(
+            f"global inputs '{GLOBAL_INPUTS_BASENAME}'", global_inputs_yaml_text
+        )
         pending_sources.append(
             (
                 f"global inputs '{GLOBAL_INPUTS_BASENAME}'",
@@ -177,18 +207,29 @@ def build_overrides(
             visited_repo_names.add(repo_name)
             pending_sources.append((f"local repo '{repo_name}'", nested_source, set()))
 
-    return overrides
+    effective_input_names = root_input_names | set(overrides)
+    for import_name in global_imports:
+        if include_inputs and import_name not in include_inputs:
+            continue
+        if import_name in exclude_inputs:
+            continue
+        if import_name in effective_input_names:
+            append_unique_name(rendered_imports, import_name)
+
+    return overrides, rendered_imports
 
 
-def render_overrides_text(overrides):
-    if not overrides:
+def render_overrides_text(overrides, imports_list):
+    if not overrides and not imports_list:
         return ""
 
-    return yaml.safe_dump(
-        {"inputs": {name: overrides[name] for name in sorted(overrides)}},
-        sort_keys=True,
-        default_flow_style=False,
-    )
+    rendered = {}
+    if overrides:
+        rendered["inputs"] = {name: overrides[name] for name in sorted(overrides)}
+    if imports_list:
+        rendered["imports"] = imports_list
+
+    return yaml.safe_dump(rendered, sort_keys=False, default_flow_style=False)
 
 
 def run_generator_mode(
@@ -213,7 +254,7 @@ def run_generator_mode(
     with open(source_yaml_path, "r", encoding="utf-8") as handle:
         source_yaml_text = handle.read()
 
-    overrides = build_overrides(
+    overrides, imports_list = build_overrides(
         source_yaml_text,
         global_inputs_yaml_text,
         local_repo_names,
@@ -223,7 +264,7 @@ def run_generator_mode(
         repos_root,
         url_scheme,
     )
-    sys.stdout.write(render_overrides_text(overrides))
+    sys.stdout.write(render_overrides_text(overrides, imports_list))
     return 0
 
 
@@ -289,7 +330,7 @@ def sync_local_overrides(
                 with open(nested_path, "r", encoding="utf-8") as handle:
                     repo_sources[repo_name] = handle.read()
 
-    overrides = build_overrides(
+    overrides, imports_list = build_overrides(
         source_yaml_text,
         global_inputs_yaml_text,
         repo_names,
@@ -299,7 +340,7 @@ def sync_local_overrides(
         repos_root,
         url_scheme,
     )
-    overrides_text = render_overrides_text(overrides)
+    overrides_text = render_overrides_text(overrides, imports_list)
 
     if overrides_text == "":
         if os.path.lexists(output_yaml_path):
