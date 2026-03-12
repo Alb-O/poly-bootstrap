@@ -47,6 +47,9 @@ use devenv
 
 - Existing stale `devenv.local.yaml` files still need one refresh before newly
   discovered transitive overrides can affect the next evaluation.
+- `bootstrap-local-inputs` also refreshes `devenv.lock` when the generated local
+  inputs and the current lockfile root inputs drift, even if `devenv.local.yaml`
+  itself did not change.
 - `bootstrap-local-inputs` prefers an existing `python3` with `PyYAML`
   available. If that import is missing, it falls back to a repo-owned pinned
   bootstrap environment under `nix/flake-bootstrap/`, so users do not need to
