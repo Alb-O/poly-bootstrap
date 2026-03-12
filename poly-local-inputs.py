@@ -62,6 +62,12 @@ def get_imports_list(source_label, yaml_text):
     return names
 
 
+def get_import_input_name(import_name):
+    if import_name.startswith(("path:", "/", "./", "../")):
+        return None
+    return import_name.split("/", 1)[0] or None
+
+
 def read_input_spec(input_spec):
     if isinstance(input_spec, dict):
         url = input_spec.get("url")
@@ -209,11 +215,12 @@ def build_overrides(
 
     effective_input_names = root_input_names | set(overrides)
     for import_name in global_imports:
-        if include_inputs and import_name not in include_inputs:
+        import_input_name = get_import_input_name(import_name) or import_name
+        if include_inputs and import_input_name not in include_inputs:
             continue
-        if import_name in exclude_inputs:
+        if import_input_name in exclude_inputs:
             continue
-        if import_name in effective_input_names:
+        if import_input_name in effective_input_names:
             append_unique_name(rendered_imports, import_name)
 
     return overrides, rendered_imports

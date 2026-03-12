@@ -97,3 +97,4 @@ Rules:
 - global defaults still participate in local-path resolution
 - transitive scanning also applies to matching global defaults
 - shared imports are only emitted when the input exists after merging
+- nested imports such as `repo-name/subdir` are supported and are matched against the base input name
