@@ -1,0 +1,10 @@
+inputs:
+  agent-scripts:
+    url: github:Alb-O/agent-scripts
+    flake: false
+  remote-only:
+    url: github:Alb-O/not-local
+    flake: false
+imports:
+  - agent-scripts
+  - remote-only

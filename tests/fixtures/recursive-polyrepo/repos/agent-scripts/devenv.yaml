@@ -1,0 +1,9 @@
+inputs:
+  docs-shared:
+    url: github:Alb-O/poly-docs-env
+    flake: false
+  missing-local:
+    url: github:Alb-O/not-present
+    flake: false
+imports:
+  - docs-shared/subdir

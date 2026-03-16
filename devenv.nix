@@ -1,7 +1,14 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   overlapNames = first: second: lib.lists.intersectLists first second;
+  repoRoot = toString ./.;
+  isRepoLocalDevEnv = toString config.devenv.root == repoRoot;
 in
 {
   options.composer.localInputOverrides = {
@@ -60,26 +67,43 @@ in
     };
   };
 
-  config = {
-    assertions = [
-      {
-        assertion =
-          overlapNames
-            config.composer.localInputOverrides.includeRepos
-            config.composer.localInputOverrides.excludeRepos
-          == [ ];
-        message = "composer.localInputOverrides.includeRepos and excludeRepos must not overlap.";
-      }
-      {
-        assertion =
-          overlapNames
-            config.composer.localInputOverrides.includeInputs
-            config.composer.localInputOverrides.excludeInputs
-          == [ ];
-        message = "composer.localInputOverrides.includeInputs and excludeInputs must not overlap.";
-      }
-    ];
-  };
+  config = lib.mkMerge [
+    {
+      assertions = [
+        {
+          assertion =
+            overlapNames
+              config.composer.localInputOverrides.includeRepos
+              config.composer.localInputOverrides.excludeRepos
+            == [ ];
+          message = "composer.localInputOverrides.includeRepos and excludeRepos must not overlap.";
+        }
+        {
+          assertion =
+            overlapNames
+              config.composer.localInputOverrides.includeInputs
+              config.composer.localInputOverrides.excludeInputs
+            == [ ];
+          message = "composer.localInputOverrides.includeInputs and excludeInputs must not overlap.";
+        }
+      ];
+    }
+    (lib.mkIf isRepoLocalDevEnv {
+      packages = [ pkgs.nix-unit ];
+
+      scripts = {
+        ci.exec = "run-nix-tests";
+        run-nix-tests.exec = ''
+          nix-unit --expr 'import ${config.devenv.root}/tests { lib = import ${pkgs.path}/lib; pkgs = import ${pkgs.path} {}; repoRoot = ${config.devenv.root}; }'
+        '';
+      };
+
+      enterTest = ''
+        set -euo pipefail
+        run-nix-tests
+      '';
+    })
+  ];
 
   imports = [ ./nix/local-input-overrides ];
 }

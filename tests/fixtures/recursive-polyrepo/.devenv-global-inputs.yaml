@@ -1,0 +1,14 @@
+inputs:
+  docs-shared:
+    url: github:Alb-O/poly-docs-env
+    flake: false
+  remote-global:
+    url: github:Alb-O/remote-global
+    flake: false
+  agent-scripts:
+    url: github:Alb-O/agent-scripts
+    flake: false
+imports:
+  - docs-shared/subdir
+  - remote-global
+  - agent-scripts/tooling

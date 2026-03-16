@@ -14,6 +14,14 @@ overrides for both `B` and `C`.
 - Materialized file: `devenv.local.yaml` (configurable)
 - Output: `outputs.local_input_overrides`
 
+## Testing
+
+Inside this repo's own shell:
+
+```bash
+devenv shell --no-tui -- bash -lc 'run-nix-tests'
+```
+
 ## Options
 
 - `polyrepoRoot`: actual polyrepo root
