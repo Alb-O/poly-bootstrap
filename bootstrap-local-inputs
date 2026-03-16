@@ -21,12 +21,16 @@ run_sync_json() {
 
 sync_status_json="$(run_sync_json "$@")"
 
-refresh_needed="$(
-  printf '%s' "$sync_status_json" | run_nu -c '
-    let status = ($in | from json)
-    if ($status.changed or $status.lock_refresh_needed) { "1" } else { "0" }
-  '
-)"
+if [ -z "$sync_status_json" ]; then
+  refresh_needed=0
+else
+  refresh_needed="$(
+    printf '%s' "$sync_status_json" | run_nu -c '
+      let status = ($in | from json)
+      if ($status.changed or $status.lock_refresh_needed) { "1" } else { "0" }
+    '
+  )"
+fi
 
 if [ "$refresh_needed" -eq 1 ]; then
   (
