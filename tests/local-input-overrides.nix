@@ -9,10 +9,11 @@ let
   fixtureRoot = "${toString repoRoot}/tests/fixtures";
   fixturePath = name: "${fixtureRoot}/${name}";
   stripContext = builtins.unsafeDiscardStringContext;
-  generatorScript = builtins.path {
-    path = "${toString repoRoot}/poly-local-inputs.nu";
-    name = "poly-local-inputs.nu";
+  generatorSource = builtins.path {
+    path = repoRoot;
+    name = "poly-local-inputs-source";
   };
+  generatorScript = "${generatorSource}/poly-local-inputs.nu";
   localInputOverridesModule = import "${repoRoot}/devenv.nix";
 
   readYaml =
@@ -41,13 +42,16 @@ let
       )
     );
 
-  runSync =
+  readJson = path: builtins.fromJSON (stripContext (builtins.readFile path));
+
+  runFixture =
     {
       derivationNamePrefix,
       fixture,
       repoPath,
       extraArgs ? [ ],
-      beforeSync ? "",
+      beforeRun ? "",
+      script,
     }:
     pkgs.runCommand derivationNamePrefix
       {
@@ -65,8 +69,89 @@ let
         mkdir -p "$out"
         cp -R "$fixtureSource"/. "$out"/
         chmod -R u+w "$out"
+        repo_path="$out/${repoPath}"
+        ${beforeRun}
+        ${script}
+      '';
+
+  runSync =
+    args:
+    runFixture (
+      args
+      // {
+        script = ''
+          ${nu} ${generatorScript} sync "$repo_path" $argsString
+        '';
+      }
+    );
+
+  runSyncJson =
+    {
+      derivationNamePrefix,
+      fixture,
+      repoPath,
+      extraArgs ? [ ],
+      beforeSync ? "",
+      prepare ? "",
+    }:
+    runFixture {
+      inherit derivationNamePrefix fixture repoPath extraArgs;
+      beforeRun = beforeSync;
+      script = ''
+        ${prepare}
+        ${nu} ${generatorScript} sync --json "$repo_path" $argsString > "$out/status.json"
+      '';
+    };
+
+  runRenderManifest =
+    {
+      derivationNamePrefix,
+      manifest,
+    }:
+    pkgs.runCommand derivationNamePrefix
+      {
+        nativeBuildInputs = [ pkgs.nushell ];
+        passAsFile = [ "manifestJson" ];
+        manifestJson = builtins.toJSON manifest;
+      }
+      ''
+        ${nu} ${generatorScript} render-manifest "$manifestJsonPath" > "$out"
+      '';
+
+  runModuleSync =
+    {
+      derivationNamePrefix,
+      fixture,
+      repoPath,
+      beforeSync ? "",
+    }:
+    pkgs.runCommand derivationNamePrefix
+      {
+        nativeBuildInputs = [
+          pkgs.nushell
+          pythonWithYaml
+        ];
+        fixtureSource = builtins.path {
+          path = fixturePath fixture;
+          name = "${derivationNamePrefix}-fixture";
+        };
+      }
+      ''
+        mkdir -p "$out"
+        cp -R "$fixtureSource"/. "$out"/
+        chmod -R u+w "$out"
+        export REPO_PATH="$out/${repoPath}"
         ${beforeSync}
-        ${nu} ${generatorScript} sync "$out/${repoPath}" $argsString
+        cd "${generatorSource}"
+        ${nu} -c '
+          use nu/mod.nu [render-local-overrides sync-local-overrides lock-status]
+
+          let sync_status = sync-local-overrides { repo_root: $env.REPO_PATH }
+          {
+            sync: $sync_status
+            lock: (lock-status $sync_status.output_path ($env.REPO_PATH | path join "devenv.lock"))
+          } | to json --raw
+        ' > "$out/status.json"
       '';
 
   supportOptionsModule =
@@ -210,7 +295,7 @@ in
           derivationNamePrefix = "local-input-overrides-sync-removes-stale";
           fixture = "no-local-polyrepo";
           repoPath = "repos/app";
-          beforeSync = ''
+          beforeRun = ''
             cat > "$out/repos/app/devenv.local.yaml" <<'EOF'
             inputs:
               stale:
@@ -220,6 +305,108 @@ in
         };
       in
       !(builtins.pathExists "${output}/repos/app/devenv.local.yaml");
+    expected = true;
+  };
+
+  localInputOverrides."test render-manifest emits expected yaml" = {
+    expr =
+      let
+        fixture = fixturePath "recursive-polyrepo";
+        rendered = readYaml (
+          runRenderManifest {
+            derivationNamePrefix = "local-input-overrides-render-manifest";
+            manifest = {
+              source_yaml_text = builtins.readFile "${fixture}/repos/app/devenv.yaml";
+              global_inputs_yaml_text = builtins.readFile "${fixture}/.devenv-global-inputs.yaml";
+              local_repo_names = [
+                "agent-scripts"
+                "poly-docs-env"
+              ];
+              repo_sources = {
+                agent-scripts = builtins.readFile "${fixture}/repos/agent-scripts/devenv.yaml";
+                poly-docs-env = builtins.readFile "${fixture}/repos/poly-docs-env/devenv.yaml";
+              };
+              include_inputs = [ ];
+              exclude_inputs = [ ];
+              repo_dirs_root = "${fixture}/repos";
+              url_scheme = "path";
+            };
+          }
+        );
+      in
+      stripContext rendered.inputs.agent-scripts.url
+      == stripContext "path:${fixturePath "recursive-polyrepo"}/repos/agent-scripts"
+      && stripContext rendered.inputs.docs-shared.url
+      == stripContext "path:${fixturePath "recursive-polyrepo"}/repos/poly-docs-env"
+      && rendered.imports == [
+        "docs-shared/subdir"
+        "agent-scripts/tooling"
+      ];
+    expected = true;
+  };
+
+  localInputOverrides."test sync json reports written status and missing lock" = {
+    expr =
+      let
+        output = runSyncJson {
+          derivationNamePrefix = "local-input-overrides-sync-json-written";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/app";
+        };
+        status = readJson "${output}/status.json";
+      in
+      status.mode == "written"
+      && status.changed == true
+      && status.removed == false
+      && status.lock_status.status == "missing-lock"
+      && status.lock_refresh_needed == true;
+    expected = true;
+  };
+
+  localInputOverrides."test sync json reports unchanged status when rerun" = {
+    expr =
+      let
+        output = runSyncJson {
+          derivationNamePrefix = "local-input-overrides-sync-json-unchanged";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/app";
+          prepare = ''
+            ${nu} ${generatorScript} sync "$repo_path"
+          '';
+        };
+        status = readJson "${output}/status.json";
+      in
+      status.mode == "unchanged"
+      && status.changed == false
+      && status.removed == false
+      && status.lock_status.status == "missing-lock"
+      && status.lock_refresh_needed == true;
+    expected = true;
+  };
+
+  localInputOverrides."test sync json reports removed status for stale output cleanup" = {
+    expr =
+      let
+        output = runSyncJson {
+          derivationNamePrefix = "local-input-overrides-sync-json-removed";
+          fixture = "no-local-polyrepo";
+          repoPath = "repos/app";
+          beforeSync = ''
+            cat > "$out/repos/app/devenv.local.yaml" <<'EOF'
+            inputs:
+              stale:
+                url: path:/tmp/stale
+            EOF
+          '';
+        };
+        status = readJson "${output}/status.json";
+      in
+      status.mode == "removed"
+      && status.changed == true
+      && status.removed == true
+      && status.lock_status.status == "clean"
+      && status.lock_refresh_needed == false
+      && !(builtins.pathExists "${output}/repos/app/devenv.local.yaml");
     expected = true;
   };
 
@@ -241,6 +428,26 @@ in
         "docs-shared/subdir"
         "agent-scripts/tooling"
       ];
+    expected = true;
+  };
+
+  localInputOverrides."test supported nu module exports sync and lock helpers" = {
+    expr =
+      let
+        output = runModuleSync {
+          derivationNamePrefix = "local-input-overrides-module-sync";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/app";
+        };
+        status = readJson "${output}/status.json";
+        rendered = readYaml "${output}/repos/app/devenv.local.yaml";
+      in
+      status.sync.mode == "written"
+      && status.sync.changed == true
+      && status.sync.lock_status.status == "missing-lock"
+      && status.lock.status == "missing-lock"
+      && stripContext rendered.inputs.agent-scripts.url
+      == stripContext "path:${output}/repos/agent-scripts";
     expected = true;
   };
 

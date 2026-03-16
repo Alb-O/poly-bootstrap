@@ -2,7 +2,11 @@
 
 let
   nu = pkgs.lib.getExe pkgs.nushell;
-  localInputOverridesScript = ../../poly-local-inputs.nu;
+  localInputOverridesSource = builtins.path {
+    path = ../..;
+    name = "poly-local-inputs-source";
+  };
+  localInputOverridesScript = "${localInputOverridesSource}/poly-local-inputs.nu";
 in
 (
   {
@@ -17,34 +21,21 @@ in
     builtins.readFile (
       pkgs.runCommand "local-input-overrides.yaml" {
         nativeBuildInputs = [ pkgs.nushell ];
-        passAsFile = [
-          "sourceYaml"
-          "repoNamesJson"
-          "repoSourcesJson"
-          "globalInputsYaml"
-          "includeInputsJson"
-          "excludeInputsJson"
-        ];
-        # Pass larger YAML/JSON payloads via files instead of shell-escaped env.
-        sourceYaml = builtins.readFile sourcePath;
-        repoNamesJson = builtins.toJSON repoNames;
-        repoSourcesJson = builtins.toJSON repoSources;
-        globalInputsYaml = globalInputsText;
-        includeInputsJson = builtins.toJSON cfg.includeInputs;
-        excludeInputsJson = builtins.toJSON cfg.excludeInputs;
-        repoDirsRoot = repoDirsRoot;
-        urlScheme = cfg.urlScheme;
+        passAsFile = [ "manifestJson" ];
+        # Pass the full render spec as one manifest file instead of a bundle of
+        # positional payload files.
+        manifestJson = builtins.toJSON {
+          source_yaml_text = builtins.readFile sourcePath;
+          global_inputs_yaml_text = globalInputsText;
+          local_repo_names = repoNames;
+          repo_sources = repoSources;
+          include_inputs = cfg.includeInputs;
+          exclude_inputs = cfg.excludeInputs;
+          repo_dirs_root = repoDirsRoot;
+          url_scheme = cfg.urlScheme;
+        };
       } ''
-        ${nu} ${localInputOverridesScript} generate \
-          "$sourceYamlPath" \
-          "$repoNamesJsonPath" \
-          "$repoSourcesJsonPath" \
-          "$globalInputsYamlPath" \
-          "$includeInputsJsonPath" \
-          "$excludeInputsJsonPath" \
-          "$repoDirsRoot" \
-          "$urlScheme" \
-          > "$out"
+        ${nu} ${localInputOverridesScript} render-manifest "$manifestJsonPath" > "$out"
       ''
     )
   else

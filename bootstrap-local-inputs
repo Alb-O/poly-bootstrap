@@ -3,8 +3,6 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${1:-.}"
-output_path="$repo_root/devenv.local.yaml"
-lock_path="$repo_root/devenv.lock"
 nu_script="$script_dir/poly-local-inputs.nu"
 
 run_nu() {
@@ -17,54 +15,18 @@ run_nu() {
   fi
 }
 
-run_sync() {
-  run_nu "$nu_script" sync "$@"
+run_sync_json() {
+  run_nu "$nu_script" sync --json "$@"
 }
 
-# `devenv.local.yaml` affects the root input graph, but `devenv.lock` still
-# controls which inputs are actually present during evaluation. If the local
-# overrides gain a new transitive input like `pw`, a plain regen of the YAML is
-# not enough; the lock must also be refreshed so the root node exposes it.
-lock_needs_refresh() {
-  if [ ! -f "$output_path" ]; then
-    return 1
-  fi
+sync_status_json="$(run_sync_json "$@")"
 
-  if [ ! -f "$lock_path" ]; then
-    return 0
-  fi
-
-  local status
-  status="$(run_nu "$nu_script" lock-status "$output_path" "$lock_path")"
-
-  [ "$status" != "clean" ]
-}
-
-before_hash="__missing__"
-if [ -f "$output_path" ]; then
-  before_hash="$(sha256sum "$output_path")"
-fi
-
-run_sync "$@"
-
-after_hash="__missing__"
-if [ -f "$output_path" ]; then
-  after_hash="$(sha256sum "$output_path")"
-fi
-
-# Refresh the lock when either:
-# 1. the generated override file changed, or
-# 2. the override file stayed the same but now disagrees with the lock's root
-#    inputs/path nodes. Case 2 is the stale-lock failure mode that produced
-#    `attribute 'pw' missing` even after regenerating `devenv.local.yaml`.
-refresh_needed=0
-if lock_needs_refresh; then
-  refresh_needed=1
-fi
-
-if [ "$before_hash" != "$after_hash" ]; then
-  refresh_needed=1
-fi
+refresh_needed="$(
+  printf '%s' "$sync_status_json" | run_nu -c '
+    let status = ($in | from json)
+    if ($status.changed or $status.lock_refresh_needed) { "1" } else { "0" }
+  '
+)"
 
 if [ "$refresh_needed" -eq 1 ]; then
   (

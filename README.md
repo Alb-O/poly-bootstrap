@@ -14,6 +14,12 @@ overrides for both `B` and `C`.
 - Materialized file: `devenv.local.yaml` (configurable)
 - Output: `outputs.local_input_overrides`
 
+## Public Interfaces
+
+- Human CLI: `poly-local-inputs.nu sync`
+- Machine CLI: `poly-local-inputs.nu render-manifest <manifest.json>`
+- Supported Nushell module: `use nu/mod.nu [render-local-overrides sync-local-overrides lock-status]`
+
 ## Testing
 
 Inside this repo's own shell:
@@ -57,7 +63,8 @@ use devenv
   discovered transitive overrides can affect the next evaluation.
 - `bootstrap-local-inputs` also refreshes `devenv.lock` when the generated local
   inputs and the current lockfile root inputs drift, even if `devenv.local.yaml`
-  itself did not change.
+  itself did not change. It now decides that from `sync --json` status instead
+  of reparsing CLI text output.
 - `bootstrap-local-inputs` prefers an existing `nu`. If Nushell is not already
   available, it falls back to a repo-owned pinned bootstrap environment under
   `nix/flake-bootstrap/`, so users do not need to edit global Nix
@@ -84,6 +91,49 @@ composer.localInputOverrides = {
 When the current repo already lives under `${polyrepoRoot}/${repoDirsPath}/...`,
 `polyrepoRoot` can usually be omitted and inferred. Top-level polyrepo configs
 should set it explicitly.
+
+## CLI
+
+Normal repo update:
+
+```bash
+nu poly-local-inputs.nu sync .
+```
+
+Structured status for automation:
+
+```bash
+nu poly-local-inputs.nu sync --json .
+```
+
+Machine render from one manifest file:
+
+```bash
+nu poly-local-inputs.nu render-manifest render-spec.json
+```
+
+Manifest shape:
+
+```json
+{
+  "source_yaml_text": "inputs: {}",
+  "global_inputs_yaml_text": "",
+  "local_repo_names": ["agent-scripts"],
+  "repo_sources": {
+    "agent-scripts": "inputs: {}"
+  },
+  "include_inputs": [],
+  "exclude_inputs": [],
+  "repo_dirs_root": "/path/to/polyrepo/repos",
+  "url_scheme": "path"
+}
+```
+
+Supported Nushell module:
+
+```nu
+use nu/mod.nu [render-local-overrides sync-local-overrides lock-status]
+```
 
 ## Global Defaults
 
