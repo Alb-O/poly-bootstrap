@@ -25,8 +25,8 @@ if [ -z "$sync_status_json" ]; then
   refresh_needed=0
 else
   refresh_needed="$(
-    printf '%s' "$sync_status_json" | run_nu -c '
-      let status = ($in | from json)
+    SYNC_STATUS_JSON="$sync_status_json" run_nu -c '
+      let status = ($env.SYNC_STATUS_JSON | from json)
       if ($status.changed or $status.lock_refresh_needed) { "1" } else { "0" }
     '
   )"
