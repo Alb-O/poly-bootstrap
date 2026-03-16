@@ -1,5 +1,5 @@
 {
-  description = "Bootstrap Python environment for poly-local-inputs";
+  description = "Bootstrap Nushell environment for poly-local-inputs";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -27,8 +27,8 @@
     in
     {
       packages = forAllSystems (pkgs: {
-        pyyaml = pkgs.python3.withPackages (ps: [ ps.pyyaml ]);
-        default = self.packages.${pkgs.system}.pyyaml;
+        nushell = pkgs.nushell;
+        default = self.packages.${pkgs.system}.nushell;
       });
     };
 }

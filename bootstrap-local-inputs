@@ -5,19 +5,20 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${1:-.}"
 output_path="$repo_root/devenv.local.yaml"
 lock_path="$repo_root/devenv.lock"
+nu_script="$script_dir/poly-local-inputs.nu"
 
-run_python() {
-  if python3 -c 'import yaml' >/dev/null 2>&1; then
-    python3 "$@"
+run_nu() {
+  if command -v nu >/dev/null 2>&1; then
+    nu "$@"
   else
     nix --extra-experimental-features 'nix-command flakes' \
-      shell "path:${script_dir}/nix/flake-bootstrap#pyyaml" \
-      -c python3 "$@"
+      shell "path:${script_dir}/nix/flake-bootstrap#nushell" \
+      -c nu "$@"
   fi
 }
 
 run_sync() {
-  run_python "$script_dir/poly-local-inputs.py" sync "$@"
+  run_nu "$nu_script" sync "$@"
 }
 
 # `devenv.local.yaml` affects the root input graph, but `devenv.lock` still
@@ -34,64 +35,7 @@ lock_needs_refresh() {
   fi
 
   local status
-  status="$(
-    run_python - "$output_path" "$lock_path" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-import yaml
-
-output_path = Path(sys.argv[1])
-lock_path = Path(sys.argv[2])
-
-local_doc = yaml.safe_load(output_path.read_text(encoding="utf-8")) or {}
-desired_inputs = local_doc.get("inputs", {}) or {}
-
-if not desired_inputs:
-    print("clean")
-    raise SystemExit(0)
-
-lock_doc = json.loads(lock_path.read_text(encoding="utf-8"))
-root_name = lock_doc.get("root")
-root_node = (lock_doc.get("nodes") or {}).get(root_name, {})
-root_inputs = root_node.get("inputs", {}) or {}
-nodes = lock_doc.get("nodes") or {}
-
-for input_name, input_spec in desired_inputs.items():
-    if input_name not in root_inputs:
-        print(f"missing-root-input:{input_name}")
-        raise SystemExit(0)
-
-    url = (input_spec or {}).get("url")
-    if not isinstance(url, str):
-        continue
-
-    expected_path = None
-    if url.startswith("path:"):
-        expected_path = url[len("path:") :]
-    elif url.startswith("git+file:"):
-        expected_path = url[len("git+file:") :]
-
-    if expected_path is None:
-        continue
-
-    node_name = root_inputs[input_name]
-    node = nodes.get(node_name, {})
-    locked = node.get("locked") or {}
-    original = node.get("original") or {}
-    candidate_paths = {
-        locked.get("path"),
-        original.get("path"),
-    }
-
-    if expected_path not in candidate_paths:
-        print(f"stale-path:{input_name}")
-        raise SystemExit(0)
-
-print("clean")
-PY
-  )"
+  status="$(run_nu "$nu_script" lock-status "$output_path" "$lock_path")"
 
   [ "$status" != "clean" ]
 }

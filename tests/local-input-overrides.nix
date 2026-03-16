@@ -5,12 +5,13 @@
 }:
 let
   pythonWithYaml = pkgs.python3.withPackages (ps: [ ps.pyyaml ]);
+  nu = lib.getExe pkgs.nushell;
   fixtureRoot = "${toString repoRoot}/tests/fixtures";
   fixturePath = name: "${fixtureRoot}/${name}";
   stripContext = builtins.unsafeDiscardStringContext;
   generatorScript = builtins.path {
-    path = "${toString repoRoot}/poly-local-inputs.py";
-    name = "poly-local-inputs.py";
+    path = "${toString repoRoot}/poly-local-inputs.nu";
+    name = "poly-local-inputs.nu";
   };
   localInputOverridesModule = import "${repoRoot}/devenv.nix";
 
@@ -50,7 +51,10 @@ let
     }:
     pkgs.runCommand derivationNamePrefix
       {
-        nativeBuildInputs = [ pythonWithYaml ];
+        nativeBuildInputs = [
+          pkgs.nushell
+          pythonWithYaml
+        ];
         fixtureSource = builtins.path {
           path = fixturePath fixture;
           name = "${derivationNamePrefix}-fixture";
@@ -62,7 +66,7 @@ let
         cp -R "$fixtureSource"/. "$out"/
         chmod -R u+w "$out"
         ${beforeSync}
-        python3 ${generatorScript} sync "$out/${repoPath}" $argsString
+        ${nu} ${generatorScript} sync "$out/${repoPath}" $argsString
       '';
 
   supportOptionsModule =

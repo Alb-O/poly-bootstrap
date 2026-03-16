@@ -1,8 +1,8 @@
 { pkgs }:
 
 let
-  pythonWithYaml = pkgs.python3.withPackages (ps: [ ps.pyyaml ]);
-  localInputOverridesScript = ../../poly-local-inputs.py;
+  nu = pkgs.lib.getExe pkgs.nushell;
+  localInputOverridesScript = ../../poly-local-inputs.nu;
 in
 (
   {
@@ -16,7 +16,7 @@ in
   if builtins.pathExists sourcePath then
     builtins.readFile (
       pkgs.runCommand "local-input-overrides.yaml" {
-        nativeBuildInputs = [ pythonWithYaml ];
+        nativeBuildInputs = [ pkgs.nushell ];
         passAsFile = [
           "sourceYaml"
           "repoNamesJson"
@@ -35,7 +35,7 @@ in
         repoDirsRoot = repoDirsRoot;
         urlScheme = cfg.urlScheme;
       } ''
-        python3 ${localInputOverridesScript} \
+        ${nu} ${localInputOverridesScript} \
           "$sourceYamlPath" \
           "$repoNamesJsonPath" \
           "$repoSourcesJsonPath" \
