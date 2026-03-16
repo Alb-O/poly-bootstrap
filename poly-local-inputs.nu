@@ -1,19 +1,9 @@
 #!/usr/bin/env nu
 
 const global_inputs_basename = ".devenv-global-inputs.yaml"
-const usage_text = "
-Usage:
-  poly-local-inputs.nu <source-yaml-path> <local-repo-names-json-path> <repo-sources-json-path> <global-inputs-yaml-path> <include-inputs-json-path> <exclude-inputs-json-path> <repo-dirs-root> <url-scheme>
-  poly-local-inputs.nu sync [repo-root] [--source-path <path>] [--output-path <path>] [--polyrepo-root <path>] [--repo-dirs-path <path>] [--url-scheme <path|git+file>] [--include-repo <name>]... [--exclude-repo <name>]... [--include-input <name>]... [--exclude-input <name>]...
-  poly-local-inputs.nu lock-status <devenv.local.yaml-path> <devenv.lock-path>
-"
 
 def fail [message: string] {
   error make --unspanned $message
-}
-
-def usage [] {
-  $usage_text | str trim
 }
 
 def normalize-yaml-value [value: any] {
@@ -641,115 +631,54 @@ def lock-status [output_path: string lock_path: string] {
   "clean"
 }
 
-def parse-sync-args [args: list<string>] {
-  mut repo_root = "."
-  mut source_path = "devenv.yaml"
-  mut output_path = "devenv.local.yaml"
-  mut polyrepo_root = null
-  mut repo_dirs_path = "repos"
-  mut url_scheme = "path"
+def parse-repeatable-sync-flags [args: list<string>] {
   mut include_repos = []
   mut exclude_repos = []
   mut include_inputs = []
   mut exclude_inputs = []
-  mut saw_repo_root = false
   mut index = 0
 
   while $index < ($args | length) {
     let arg = ($args | get $index)
 
     match $arg {
-      "--source-path" => {
+      "--include-repo" | "-i" => {
         $index = ($index + 1)
         if $index >= ($args | length) {
-          fail "--source-path requires a value"
-        }
-        $source_path = ($args | get $index)
-      }
-      "--output-path" => {
-        $index = ($index + 1)
-        if $index >= ($args | length) {
-          fail "--output-path requires a value"
-        }
-        $output_path = ($args | get $index)
-      }
-      "--polyrepo-root" => {
-        $index = ($index + 1)
-        if $index >= ($args | length) {
-          fail "--polyrepo-root requires a value"
-        }
-        $polyrepo_root = ($args | get $index)
-      }
-      "--repo-dirs-path" => {
-        $index = ($index + 1)
-        if $index >= ($args | length) {
-          fail "--repo-dirs-path requires a value"
-        }
-        $repo_dirs_path = ($args | get $index)
-      }
-      "--url-scheme" => {
-        $index = ($index + 1)
-        if $index >= ($args | length) {
-          fail "--url-scheme requires a value"
-        }
-        $url_scheme = ($args | get $index)
-      }
-      "--include-repo" => {
-        $index = ($index + 1)
-        if $index >= ($args | length) {
-          fail "--include-repo requires a value"
+          fail $"($arg) requires a value"
         }
         $include_repos = ($include_repos | append ($args | get $index))
       }
-      "--exclude-repo" => {
+      "--exclude-repo" | "-x" => {
         $index = ($index + 1)
         if $index >= ($args | length) {
-          fail "--exclude-repo requires a value"
+          fail $"($arg) requires a value"
         }
         $exclude_repos = ($exclude_repos | append ($args | get $index))
       }
-      "--include-input" => {
+      "--include-input" | "-I" => {
         $index = ($index + 1)
         if $index >= ($args | length) {
-          fail "--include-input requires a value"
+          fail $"($arg) requires a value"
         }
         $include_inputs = ($include_inputs | append ($args | get $index))
       }
-      "--exclude-input" => {
+      "--exclude-input" | "-X" => {
         $index = ($index + 1)
         if $index >= ($args | length) {
-          fail "--exclude-input requires a value"
+          fail $"($arg) requires a value"
         }
         $exclude_inputs = ($exclude_inputs | append ($args | get $index))
       }
       _ => {
-        if ($arg | str starts-with "-") {
-          fail $"unknown flag: ($arg)"
-        }
-
-        if $saw_repo_root {
-          fail $"unexpected argument: ($arg)"
-        }
-
-        $repo_root = $arg
-        $saw_repo_root = true
+        fail $"unknown sync flag: ($arg)"
       }
     }
 
     $index = ($index + 1)
   }
 
-  if $url_scheme not-in [ "path" "git+file" ] {
-    fail $"--url-scheme must be one of: path, git+file (got '($url_scheme)')"
-  }
-
   {
-    repo_root: $repo_root
-    source_path: $source_path
-    output_path: $output_path
-    polyrepo_root: $polyrepo_root
-    repo_dirs_path: $repo_dirs_path
-    url_scheme: $url_scheme
     include_repos: ($include_repos | uniq)
     exclude_repos: ($exclude_repos | uniq)
     include_inputs: ($include_inputs | uniq)
@@ -757,38 +686,71 @@ def parse-sync-args [args: list<string>] {
   }
 }
 
-def --wrapped main [...args: string] {
-  if ($args | length) == 8 {
-    return (run-generator-mode ($args | get 0) ($args | get 1) ($args | get 2) ($args | get 3) ($args | get 4) ($args | get 5) ($args | get 6) ($args | get 7))
+# Generate local input overrides for sibling repos.
+#
+# Use `main sync` for normal repo updates, `main generate` for Nix builders,
+# and `main lock-status` for bootstrap lockfile drift checks.
+def main [] {
+  help main
+}
+
+# Generate local input overrides from builder inputs.
+#
+# This subcommand is the structured interface used by the Nix module during
+# evaluation-friendly render steps.
+def "main generate" [
+  source_yaml_path: string         # Root devenv YAML file to scan.
+  local_repo_names_path: string    # JSON file containing local repo directory names.
+  repo_sources_json_path: string   # JSON mapping of repo names to nested source YAML text.
+  global_inputs_yaml_path: string  # YAML file containing shared global inputs.
+  include_inputs_json_path: string # JSON list of allowed input names.
+  exclude_inputs_json_path: string # JSON list of blocked input names.
+  repo_dirs_root: string           # Directory containing sibling repos.
+  url_scheme: string               # Override URL scheme: path or git+file.
+] {
+  run-generator-mode $source_yaml_path $local_repo_names_path $repo_sources_json_path $global_inputs_yaml_path $include_inputs_json_path $exclude_inputs_json_path $repo_dirs_root $url_scheme
+}
+
+# Sync local input overrides into a repo checkout.
+#
+# Repeat `--include-repo`/`-i`, `--exclude-repo`/`-x`,
+# `--include-input`/`-I`, and `--exclude-input`/`-X` as needed.
+# Use `sync --help` to view the documented signature even though those
+# repeatable filters are parsed from the wrapped rest arguments.
+def --wrapped "main sync" [
+  repo_root?: string              # Consumer repo root. Defaults to `.`.
+  --source-path (-s): string      # Source YAML path inside the consumer repo.
+  --output-path (-o): string      # Generated override YAML path inside the consumer repo.
+  --polyrepo-root (-p): string    # Explicit polyrepo root when inference is not possible.
+  --repo-dirs-path (-r): string   # Path to the sibling repo directory.
+  --url-scheme (-u): string       # Override URL scheme: path or git+file.
+  ...rest: string                 # Repeatable include/exclude filters.
+] {
+  if ('--help' in $rest) or ('-h' in $rest) or ($repo_root == '--help') or ($repo_root == '-h') {
+    return (help main sync)
   }
 
-  if ($args | is-empty) {
-    fail (usage)
+  let parsed = parse-repeatable-sync-flags $rest
+  let repo_root = ($repo_root | default ".")
+  let source_path = ($source_path | default "devenv.yaml")
+  let output_path = ($output_path | default "devenv.local.yaml")
+  let repo_dirs_path = ($repo_dirs_path | default "repos")
+  let url_scheme = ($url_scheme | default "path")
+
+  if $url_scheme not-in [ "path" "git+file" ] {
+    fail $"--url-scheme must be one of: path, git+file (got '($url_scheme)')"
   }
 
-  let command = ($args | first)
-  let rest = ($args | skip 1)
+  sync-local-overrides $repo_root $source_path $output_path $polyrepo_root $repo_dirs_path $url_scheme $parsed.include_repos $parsed.exclude_repos $parsed.include_inputs $parsed.exclude_inputs
+}
 
-  match $command {
-    "sync" => {
-      let parsed = parse-sync-args $rest
-      sync-local-overrides $parsed.repo_root $parsed.source_path $parsed.output_path $parsed.polyrepo_root $parsed.repo_dirs_path $parsed.url_scheme $parsed.include_repos $parsed.exclude_repos $parsed.include_inputs $parsed.exclude_inputs
-    }
-    "lock-status" => {
-      if ($rest | length) != 2 {
-        fail "lock-status requires <devenv.local.yaml-path> and <devenv.lock-path>"
-      }
-
-      lock-status ($rest | get 0) ($rest | get 1)
-    }
-    "--help" => {
-      usage
-    }
-    "-h" => {
-      usage
-    }
-    _ => {
-      fail (usage)
-    }
-  }
+# Report whether devenv.local.yaml and devenv.lock are aligned.
+#
+# This is used by the bootstrap wrapper to decide when `devenv update` is
+# required after local override generation.
+def "main lock-status" [
+  output_path: string # Generated devenv.local.yaml path.
+  lock_path: string   # devenv.lock path to compare against.
+] {
+  lock-status $output_path $lock_path
 }

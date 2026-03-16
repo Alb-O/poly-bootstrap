@@ -35,7 +35,7 @@ in
         repoDirsRoot = repoDirsRoot;
         urlScheme = cfg.urlScheme;
       } ''
-        ${nu} ${localInputOverridesScript} \
+        ${nu} ${localInputOverridesScript} generate \
           "$sourceYamlPath" \
           "$repoNamesJsonPath" \
           "$repoSourcesJsonPath" \
