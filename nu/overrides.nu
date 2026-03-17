@@ -2,7 +2,7 @@ use paths.nu [get-import-input-name repo-name-from-url]
 use sources.nu [get-imports-list get-input-names get-inputs-block read-input-spec]
 use support.nu [fail global-inputs-basename sort-record]
 
-def override-url-prefix [url_scheme: string] {
+def override-url-prefix [url_scheme: string]: nothing -> oneof<string, error> {
   match $url_scheme {
     "git+file" => { "git+file:" }
     "path" => { "path:" }
@@ -10,7 +10,7 @@ def override-url-prefix [url_scheme: string] {
   }
 }
 
-def input-is-selected [input_name: string include_inputs: list<string> exclude_inputs: list<string>] {
+def input-is-selected [input_name: string include_inputs: list<string> exclude_inputs: list<string>]: nothing -> bool {
   if (not ($include_inputs | is-empty)) and (not ($input_name in $include_inputs)) {
     return false
   }
@@ -22,7 +22,7 @@ def input-is-selected [input_name: string include_inputs: list<string> exclude_i
   true
 }
 
-def add-override [overrides: record input_name: string copied_spec: record source_label: string] {
+def add-override [overrides: record input_name: string copied_spec: record source_label: string]: nothing -> oneof<record, error> {
   let existing_spec = ($overrides | get -o $input_name)
 
   match ($existing_spec | describe) {
@@ -37,7 +37,7 @@ def add-override [overrides: record input_name: string copied_spec: record sourc
   }
 }
 
-def collect-global-imports [global_imports: list<string> include_inputs: list<string> exclude_inputs: list<string> effective_input_names: list<string>] {
+def collect-global-imports [global_imports: list<string> include_inputs: list<string> exclude_inputs: list<string> effective_input_names: list<string>]: nothing -> list<string> {
   $global_imports
   | where {|import_name|
       let import_input_name = (get-import-input-name $import_name | default $import_name)
@@ -56,7 +56,7 @@ export def build-overrides [
   exclude_inputs: list<string>
   repo_dirs_root: path
   url_scheme: string
-] {
+]: nothing -> record {
   let url_prefix = override-url-prefix $url_scheme
   let root_input_names = get-input-names "root source" $source_yaml_text
   let has_global_inputs = ($global_inputs_yaml_text | str trim) != ""
@@ -110,16 +110,20 @@ export def build-overrides [
         continue
       }
 
-      let input_spec = read-input-spec ($inputs_block | get $input_name)
-
-      if ($input_spec | describe) == 'nothing' {
-        continue
+      let input_spec = match (read-input-spec ($inputs_block | get $input_name)) {
+        null => { continue }
+        $input_spec => { $input_spec }
       }
 
-      let repo_name = repo-name-from-url $input_spec.url
+      let repo_name = match (repo-name-from-url $input_spec.url) {
+        null => { continue }
+        $repo_name => {
+          if not ($repo_name in $local_repo_names) {
+            continue
+          }
 
-      if (($repo_name | describe) == 'nothing') or (not ($repo_name in $local_repo_names)) {
-        continue
+          $repo_name
+        }
       }
 
       let local_repo_path = ($repo_dirs_root | path join $repo_name)
@@ -156,7 +160,7 @@ export def build-overrides [
   }
 }
 
-export def render-overrides-text [overrides: record imports_list: list<string>] {
+export def render-overrides-text [overrides: record imports_list: list<string>]: nothing -> string {
   if (($overrides | columns | is-empty) and ($imports_list | is-empty)) {
     return ""
   }

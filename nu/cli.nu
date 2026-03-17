@@ -1,6 +1,6 @@
 use support.nu [fail]
 
-def empty-sync-filters [] {
+def empty-sync-filters []: nothing -> record {
   {
     include_repos: []
     exclude_repos: []
@@ -9,7 +9,7 @@ def empty-sync-filters [] {
   }
 }
 
-def append-sync-filter [filters: record flag: string value: string] {
+def append-sync-filter [filters: record flag: string value: string]: nothing -> oneof<record, error> {
   match $flag {
     "--include-repo" | "-i" => {
       $filters | upsert include_repos ($filters.include_repos | append $value)
@@ -29,7 +29,7 @@ def append-sync-filter [filters: record flag: string value: string] {
   }
 }
 
-export def parse-repeatable-sync-flags [args: list<string>] {
+export def parse-repeatable-sync-flags [args: list<string>]: nothing -> oneof<record, error> {
   let state = (
     $args
     | reduce -f ({ pending_flag: null } | merge (empty-sync-filters)) {|arg, state|
@@ -63,7 +63,7 @@ export def parse-repeatable-sync-flags [args: list<string>] {
   }
 }
 
-export def sync-help-requested [repo_root: any rest: list<string>] {
+export def sync-help-requested [repo_root: any rest: list<string>]: nothing -> bool {
   ("--help" in $rest) or ("-h" in $rest) or (
     (($repo_root | describe) == 'string') and ($repo_root in [ "--help" "-h" ])
   )
@@ -77,7 +77,7 @@ export def build-sync-spec [
   repo_dirs_path: any
   url_scheme: any
   rest: list<string>
-] {
+]: nothing -> record {
   let filters = parse-repeatable-sync-flags $rest
 
   {
@@ -91,7 +91,7 @@ export def build-sync-spec [
   | merge $filters
 }
 
-export def render-json-status [status: any emit_json: bool] {
+export def render-json-status [status: any emit_json: bool]: nothing -> oneof<string, nothing> {
   if $emit_json {
     $status | to json --raw
   }

@@ -1,12 +1,12 @@
-export def fail [message: string] {
+export def fail [message: string]: nothing -> error {
   error make --unspanned $message
 }
 
-export def global-inputs-basename [] {
+export def global-inputs-basename []: nothing -> string {
   ".devenv-global-inputs.yaml"
 }
 
-export def fail-on-overlap [first_names: list<string> second_names: list<string> first_label: string second_label: string] {
+export def fail-on-overlap [first_names: list<string> second_names: list<string> first_label: string second_label: string]: nothing -> oneof<nothing, error> {
   let overlap = (
     $first_names
     | where {|name| $name in $second_names }
@@ -19,7 +19,7 @@ export def fail-on-overlap [first_names: list<string> second_names: list<string>
   }
 }
 
-export def sort-record [value: record] {
+export def sort-record [value: record]: nothing -> record {
   $value
   | columns
   | sort

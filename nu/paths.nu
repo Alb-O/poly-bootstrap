@@ -1,6 +1,6 @@
 use support.nu [fail]
 
-export def get-import-input-name [import_name: string] {
+export def get-import-input-name [import_name: string]: nothing -> oneof<string, nothing> {
   if ([ "path:" "/" "./" "../" ] | any {|prefix| $import_name | str starts-with $prefix }) {
     return null
   }
@@ -8,7 +8,7 @@ export def get-import-input-name [import_name: string] {
   $import_name | split row "/" | first | into string
 }
 
-export def repo-name-from-url [url: string] {
+export def repo-name-from-url [url: string]: nothing -> oneof<string, nothing> {
   let without_query = ($url | split row "?" | first)
   let without_fragment = ($without_query | split row "#" | first)
   let without_git_prefix = if ($without_fragment | str starts-with "git+") {
@@ -38,7 +38,7 @@ export def repo-name-from-url [url: string] {
   }
 }
 
-export def resolve-repo-path [repo_root: path candidate_path: path] {
+export def resolve-repo-path [repo_root: path candidate_path: path]: nothing -> path {
   if ($candidate_path | str starts-with "/") {
     $candidate_path | path expand --no-symlink
   } else {
@@ -46,11 +46,11 @@ export def resolve-repo-path [repo_root: path candidate_path: path] {
   }
 }
 
-def normalize-segments [path_value: path] {
+def normalize-segments [path_value: path]: nothing -> list<string> {
   $path_value | split row "/" | where {|segment| ($segment != "") and ($segment != ".") }
 }
 
-def dirname-n [levels: int path_value: path] {
+def dirname-n [levels: int path_value: path]: nothing -> path {
   mut current = $path_value
   mut remaining = $levels
 
@@ -62,11 +62,11 @@ def dirname-n [levels: int path_value: path] {
   $current
 }
 
-export def resolve-repo-dirs-root [polyrepo_root: path repo_dirs_path: path] {
+export def resolve-repo-dirs-root [polyrepo_root: path repo_dirs_path: path]: nothing -> path {
   resolve-repo-path $polyrepo_root $repo_dirs_path
 }
 
-def infer-polyrepo-root [repo_root: path repo_dirs_path: path] {
+def infer-polyrepo-root [repo_root: path repo_dirs_path: path]: nothing -> oneof<path, nothing> {
   if ($repo_dirs_path | str starts-with "/") {
     return null
   }
@@ -88,7 +88,7 @@ def infer-polyrepo-root [repo_root: path repo_dirs_path: path] {
   }
 }
 
-export def resolve-polyrepo-root [repo_root: path polyrepo_root: any repo_dirs_path: path] {
+export def resolve-polyrepo-root [repo_root: path polyrepo_root: any repo_dirs_path: path]: nothing -> oneof<path, error> {
   if ($polyrepo_root | describe) == 'string' {
     return (resolve-repo-path $repo_root $polyrepo_root)
   }
@@ -102,7 +102,7 @@ export def resolve-polyrepo-root [repo_root: path polyrepo_root: any repo_dirs_p
   $inferred
 }
 
-export def maybe-relativize [target_path: path root: path] {
+export def maybe-relativize [target_path: path root: path]: nothing -> oneof<path, nothing> {
   let root = ($root | path expand --no-symlink)
   let path = ($target_path | path expand --no-symlink)
   let root_prefix = $"($root)/"
@@ -114,7 +114,7 @@ export def maybe-relativize [target_path: path root: path] {
   }
 }
 
-export def list-local-repo-names [repo_dirs_root: path include_repos: list<string> exclude_repos: list<string>] {
+export def list-local-repo-names [repo_dirs_root: path include_repos: list<string> exclude_repos: list<string>]: nothing -> list<string> {
   let repo_entries = if ($repo_dirs_root | path exists) {
     ls $repo_dirs_root
   } else {
@@ -132,7 +132,7 @@ export def list-local-repo-names [repo_dirs_root: path include_repos: list<strin
   | sort
 }
 
-export def load-repo-sources [repo_dirs_root: path repo_names: list<string> source_relative_path: any] {
+export def load-repo-sources [repo_dirs_root: path repo_names: list<string> source_relative_path: any]: nothing -> record {
   if ($source_relative_path | describe) == 'nothing' {
     return {}
   }
@@ -149,7 +149,7 @@ export def load-repo-sources [repo_dirs_root: path repo_names: list<string> sour
   | into record
 }
 
-export def path-from-url [url: string] {
+export def path-from-url [url: string]: nothing -> oneof<path, nothing> {
   if ($url | str starts-with "path:") {
     $url | str substring 5..
   } else if ($url | str starts-with "git+file:") {

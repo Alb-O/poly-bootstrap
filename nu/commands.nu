@@ -16,7 +16,7 @@ use sources.nu [
 ]
 use support.nu [fail fail-on-overlap global-inputs-basename]
 
-def require-string [value: any field_label: string] {
+def require-string [value: any field_label: string]: nothing -> oneof<string, error> {
   if (($value | describe) != 'string') {
     fail $"expected ($field_label) to be a string"
   }
@@ -24,7 +24,7 @@ def require-string [value: any field_label: string] {
   $value
 }
 
-def require-path [value: any field_label: string] {
+def require-path [value: any field_label: string]: nothing -> oneof<path, error> {
   if (($value | describe) != 'string') {
     fail $"expected ($field_label) to be a path"
   }
@@ -32,18 +32,18 @@ def require-path [value: any field_label: string] {
   $value
 }
 
-def validate-url-scheme [url_scheme: string] {
+def validate-url-scheme [url_scheme: string]: nothing -> oneof<nothing, error> {
   if $url_scheme not-in [ "path" "git+file" ] {
     fail $"expected url scheme to be one of: path, git+file (got '($url_scheme)')"
   }
 }
 
-def render-normalized-overrides [spec: record] {
+def render-normalized-overrides [spec: record]: nothing -> string {
   let rendered = build-overrides $spec.source_yaml_text $spec.global_inputs_yaml_text $spec.local_repo_names $spec.repo_sources $spec.include_inputs $spec.exclude_inputs $spec.repo_dirs_root $spec.url_scheme
   render-overrides-text $rendered.overrides $rendered.imports
 }
 
-def normalize-render-spec [spec: record] {
+def normalize-render-spec [spec: record]: nothing -> record {
   # The machine render API allows a compact manifest, so fill in the optional
   # fields once here and keep the renderer itself on a fully normalized shape.
   let spec = (
@@ -81,7 +81,7 @@ def normalize-render-spec [spec: record] {
   }
 }
 
-def normalize-sync-spec [spec: record] {
+def normalize-sync-spec [spec: record]: nothing -> record {
   # Sync callers get repo-oriented defaults that match the CLI, but the command
   # implementation works against one explicit record shape after normalization.
   let spec = (
@@ -127,7 +127,7 @@ def normalize-sync-spec [spec: record] {
   }
 }
 
-def make-lock-status [status: string input_name?: any] {
+def make-lock-status [status: string input_name?: any]: nothing -> record {
   {
     status: $status
     clean: ($status == "clean")
@@ -135,21 +135,21 @@ def make-lock-status [status: string input_name?: any] {
   }
 }
 
-def sync-needs-refresh [status: record] {
+def sync-needs-refresh [status: record]: nothing -> bool {
   $status.changed or $status.lock_refresh_needed
 }
 
-def parse-render-manifest [manifest_path: path] {
+def parse-render-manifest [manifest_path: path]: nothing -> record {
   normalize-render-spec (
     parse-json-record $manifest_path "expected render manifest JSON to be a mapping"
   )
 }
 
-export def render-local-overrides [spec: record] {
+export def render-local-overrides [spec: record]: nothing -> string {
   render-normalized-overrides (normalize-render-spec $spec)
 }
 
-export def sync-local-overrides [spec: record] {
+export def sync-local-overrides [spec: record]: nothing -> record {
   let spec = normalize-sync-spec $spec
   let repo_root = ($spec.repo_root | path expand --no-symlink)
   let source_yaml_path = resolve-repo-path $repo_root $spec.source_path
@@ -213,7 +213,7 @@ export def sync-local-overrides [spec: record] {
   }
 }
 
-export def bootstrap [spec: record] {
+export def bootstrap [spec: record]: nothing -> record {
   let spec = normalize-sync-spec $spec
   let repo_root = ($spec.repo_root | path expand --no-symlink)
   let root_status = sync-local-overrides ($spec | merge { repo_root: $repo_root })
@@ -244,11 +244,11 @@ export def bootstrap [spec: record] {
   $root_status
 }
 
-export def render-manifest-file [manifest_path: path] {
+export def render-manifest-file [manifest_path: path]: nothing -> string {
   render-normalized-overrides (parse-render-manifest $manifest_path)
 }
 
-export def lock-status [output_path: path lock_path: path] {
+export def lock-status [output_path: path lock_path: path]: nothing -> oneof<record, error> {
   if not ($output_path | path exists) {
     return (make-lock-status "clean")
   }
@@ -294,10 +294,9 @@ export def lock-status [output_path: path lock_path: path] {
       continue
     }
 
-    let expected_path = path-from-url $url
-
-    if ($expected_path | describe) == 'nothing' {
-      continue
+    let expected_path = match (path-from-url $url) {
+      null => { continue }
+      $expected_path => { $expected_path }
     }
 
     let node_name = ($root_inputs | get $input_name)

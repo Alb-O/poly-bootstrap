@@ -1,6 +1,6 @@
 use support.nu [fail]
 
-def normalize-yaml-value [value: any] {
+def normalize-yaml-value [value: any]: nothing -> any {
   match ($value | describe) {
     $t if $t =~ '^record' => {
       $value
@@ -12,7 +12,7 @@ def normalize-yaml-value [value: any] {
   }
 }
 
-export def parse-top-level-mapping [source_label: string yaml_text: string] {
+export def parse-top-level-mapping [source_label: string yaml_text: string]: nothing -> oneof<record, error> {
   let parsed = if ($yaml_text | str trim) == "" {
     {}
   } else {
@@ -30,7 +30,7 @@ export def parse-top-level-mapping [source_label: string yaml_text: string] {
   normalize-yaml-value $parsed
 }
 
-export def get-inputs-block [source_label: string yaml_text: string] {
+export def get-inputs-block [source_label: string yaml_text: string]: nothing -> oneof<record, error> {
   let parsed = parse-top-level-mapping $source_label $yaml_text
   let inputs_block = ($parsed | get -o inputs | default {})
 
@@ -41,11 +41,11 @@ export def get-inputs-block [source_label: string yaml_text: string] {
   $inputs_block
 }
 
-export def get-input-names [source_label: string yaml_text: string] {
+export def get-input-names [source_label: string yaml_text: string]: nothing -> list<string> {
   get-inputs-block $source_label $yaml_text | columns
 }
 
-export def get-imports-list [source_label: string yaml_text: string] {
+export def get-imports-list [source_label: string yaml_text: string]: nothing -> oneof<list<string>, error> {
   let parsed = parse-top-level-mapping $source_label $yaml_text
   let imports_list = ($parsed | get -o imports | default [])
 
@@ -63,7 +63,7 @@ export def get-imports-list [source_label: string yaml_text: string] {
     }
 }
 
-export def read-input-spec [input_spec: any] {
+export def read-input-spec [input_spec: any]: nothing -> oneof<record, nothing> {
   match ($input_spec | describe) {
     $t if $t =~ '^record' => {
       let url = ($input_spec | get -o url)
@@ -89,7 +89,7 @@ export def read-input-spec [input_spec: any] {
   }
 }
 
-export def parse-json-record [json_path: path message: string] {
+export def parse-json-record [json_path: path message: string]: nothing -> oneof<record, error> {
   let parsed = try {
     open --raw $json_path | from json | default {}
   } catch {
@@ -103,7 +103,7 @@ export def parse-json-record [json_path: path message: string] {
   $parsed
 }
 
-export def expect-string-list [value: any field_label: string] {
+export def expect-string-list [value: any field_label: string]: nothing -> oneof<list<string>, error> {
   if (($value | describe) !~ '^list') {
     fail $"expected ($field_label) to be a list"
   }
@@ -119,7 +119,7 @@ export def expect-string-list [value: any field_label: string] {
   | uniq
 }
 
-export def expect-string-record [value: any field_label: string] {
+export def expect-string-record [value: any field_label: string]: nothing -> oneof<record, error> {
   if (($value | describe) !~ '^record') {
     fail $"expected ($field_label) to be a mapping"
   }
