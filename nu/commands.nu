@@ -24,6 +24,14 @@ def require-string [value: any field_label: string] {
   $value
 }
 
+def require-path [value: any field_label: string] {
+  if (($value | describe) != 'string') {
+    fail $"expected ($field_label) to be a path"
+  }
+
+  $value
+}
+
 def validate-url-scheme [url_scheme: string] {
   if $url_scheme not-in [ "path" "git+file" ] {
     fail $"expected url scheme to be one of: path, git+file (got '($url_scheme)')"
@@ -55,7 +63,7 @@ def normalize-render-spec [spec: record] {
   let repo_sources = expect-string-record ($spec | get -o repo_sources | default {}) "repo_sources"
   let include_inputs = expect-string-list ($spec | get -o include_inputs | default []) "include_inputs"
   let exclude_inputs = expect-string-list ($spec | get -o exclude_inputs | default []) "exclude_inputs"
-  let repo_dirs_root = require-string ($spec | get -o repo_dirs_root) "repo_dirs_root"
+  let repo_dirs_root = require-path ($spec | get -o repo_dirs_root) "repo_dirs_root"
   let url_scheme = require-string ($spec | get -o url_scheme) "url_scheme"
 
   validate-url-scheme $url_scheme
@@ -91,10 +99,10 @@ def normalize-sync-spec [spec: record] {
     | merge $spec
   )
 
-  let repo_root = require-string ($spec | get -o repo_root) "repo_root"
-  let source_path = require-string ($spec | get -o source_path) "source_path"
-  let output_path = require-string ($spec | get -o output_path) "output_path"
-  let repo_dirs_path = require-string ($spec | get -o repo_dirs_path) "repo_dirs_path"
+  let repo_root = require-path ($spec | get -o repo_root) "repo_root"
+  let source_path = require-path ($spec | get -o source_path) "source_path"
+  let output_path = require-path ($spec | get -o output_path) "output_path"
+  let repo_dirs_path = require-path ($spec | get -o repo_dirs_path) "repo_dirs_path"
   let url_scheme = require-string ($spec | get -o url_scheme) "url_scheme"
   let include_repos = expect-string-list ($spec | get -o include_repos | default []) "include_repos"
   let exclude_repos = expect-string-list ($spec | get -o exclude_repos | default []) "exclude_repos"
@@ -131,7 +139,7 @@ def sync-needs-refresh [status: record] {
   $status.changed or $status.lock_refresh_needed
 }
 
-def parse-render-manifest [manifest_path: string] {
+def parse-render-manifest [manifest_path: path] {
   normalize-render-spec (
     parse-json-record $manifest_path "expected render manifest JSON to be a mapping"
   )
@@ -143,7 +151,7 @@ export def render-local-overrides [spec: record] {
 
 export def sync-local-overrides [spec: record] {
   let spec = normalize-sync-spec $spec
-  let repo_root = ($spec.repo_root | path expand)
+  let repo_root = ($spec.repo_root | path expand --no-symlink)
   let source_yaml_path = resolve-repo-path $repo_root $spec.source_path
   let output_yaml_path = resolve-repo-path $repo_root $spec.output_path
   let lock_path = (resolve-repo-path $repo_root "devenv.lock")
@@ -209,13 +217,13 @@ export def sync-local-overrides [spec: record] {
 
 export def bootstrap [spec: record] {
   let spec = normalize-sync-spec $spec
-  let repo_root = ($spec.repo_root | path expand)
+  let repo_root = ($spec.repo_root | path expand --no-symlink)
   let root_status = sync-local-overrides ($spec | merge { repo_root: $repo_root })
   let local_repo_roots = (
     $root_status.local_repo_roots
     | default []
     | where {|path| (($path | describe) == 'string') and (not ($path | is-empty)) }
-    | each {|path| $path | path expand }
+    | each {|path| $path | path expand --no-symlink }
     | uniq
     | sort
   )
@@ -238,11 +246,11 @@ export def bootstrap [spec: record] {
   $root_status
 }
 
-export def render-manifest-file [manifest_path: string] {
+export def render-manifest-file [manifest_path: path] {
   render-normalized-overrides (parse-render-manifest $manifest_path)
 }
 
-export def lock-status [output_path: string lock_path: string] {
+export def lock-status [output_path: path lock_path: path] {
   if not ($output_path | path exists) {
     return (make-lock-status "clean")
   }

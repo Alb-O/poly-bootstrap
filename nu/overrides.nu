@@ -54,7 +54,7 @@ export def build-overrides [
   repo_sources: record
   include_inputs: list<string>
   exclude_inputs: list<string>
-  repo_dirs_root: string
+  repo_dirs_root: path
   url_scheme: string
 ] {
   let url_prefix = override-url-prefix $url_scheme

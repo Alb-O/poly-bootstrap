@@ -91,7 +91,7 @@ export def read-input-spec [input_spec: any] {
   }
 }
 
-export def parse-json-record [json_path: string message: string] {
+export def parse-json-record [json_path: path message: string] {
   let parsed = try {
     open --raw $json_path | from json | default {}
   } catch {

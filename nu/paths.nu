@@ -38,20 +38,20 @@ export def repo-name-from-url [url: string] {
   }
 }
 
-export def resolve-repo-path [repo_root: string candidate_path: string] {
+export def resolve-repo-path [repo_root: path candidate_path: path] {
   if ($candidate_path | str starts-with "/") {
-    $candidate_path | path expand
+    $candidate_path | path expand --no-symlink
   } else {
-    ($repo_root | path join $candidate_path) | path expand
+    ($repo_root | path join $candidate_path) | path expand --no-symlink
   }
 }
 
-def normalize-segments [path: string] {
-  $path | split row "/" | where {|segment| ($segment != "") and ($segment != ".") }
+def normalize-segments [path_value: path] {
+  $path_value | split row "/" | where {|segment| ($segment != "") and ($segment != ".") }
 }
 
-def dirname-n [levels: int path: string] {
-  mut current = $path
+def dirname-n [levels: int path_value: path] {
+  mut current = $path_value
   mut remaining = $levels
 
   while $remaining > 0 {
@@ -62,23 +62,23 @@ def dirname-n [levels: int path: string] {
   $current
 }
 
-export def resolve-repo-dirs-root [polyrepo_root: string repo_dirs_path: string] {
+export def resolve-repo-dirs-root [polyrepo_root: path repo_dirs_path: path] {
   resolve-repo-path $polyrepo_root $repo_dirs_path
 }
 
-def infer-polyrepo-root [repo_root: string repo_dirs_path: string] {
+def infer-polyrepo-root [repo_root: path repo_dirs_path: path] {
   if ($repo_dirs_path | str starts-with "/") {
     return null
   }
 
-  let repo_root = ($repo_root | path expand)
+  let repo_root = ($repo_root | path expand --no-symlink)
   let repo_parent = ($repo_root | path dirname)
   let repo_dirs_segments = normalize-segments $repo_dirs_path
   let repo_dirs_parent = dirname-n ($repo_dirs_segments | length) $repo_parent
   let candidate_repo_dirs_root = if ($repo_dirs_segments | is-empty) {
     $repo_dirs_parent
   } else {
-    ($repo_dirs_parent | path join $repo_dirs_path) | path expand
+    ($repo_dirs_parent | path join $repo_dirs_path) | path expand --no-symlink
   }
 
   # Inference is only valid when the current repo really lives immediately under
@@ -90,7 +90,7 @@ def infer-polyrepo-root [repo_root: string repo_dirs_path: string] {
   }
 }
 
-export def resolve-polyrepo-root [repo_root: string polyrepo_root: any repo_dirs_path: string] {
+export def resolve-polyrepo-root [repo_root: path polyrepo_root: any repo_dirs_path: path] {
   if ($polyrepo_root | describe) == 'string' {
     return (resolve-repo-path $repo_root $polyrepo_root)
   }
@@ -104,9 +104,9 @@ export def resolve-polyrepo-root [repo_root: string polyrepo_root: any repo_dirs
   $inferred
 }
 
-export def maybe-relativize [path: string root: string] {
-  let root = ($root | path expand)
-  let path = ($path | path expand)
+export def maybe-relativize [target_path: path root: path] {
+  let root = ($root | path expand --no-symlink)
+  let path = ($target_path | path expand --no-symlink)
   let root_prefix = $"($root)/"
 
   if $path == $root {
@@ -118,7 +118,7 @@ export def maybe-relativize [path: string root: string] {
   }
 }
 
-export def list-local-repo-names [repo_dirs_root: string include_repos: list<string> exclude_repos: list<string>] {
+export def list-local-repo-names [repo_dirs_root: path include_repos: list<string> exclude_repos: list<string>] {
   let repo_entries = if ($repo_dirs_root | path exists) {
     ls $repo_dirs_root
   } else {
@@ -136,7 +136,7 @@ export def list-local-repo-names [repo_dirs_root: string include_repos: list<str
   | sort
 }
 
-export def load-repo-sources [repo_dirs_root: string repo_names: list<string> source_relative_path: any] {
+export def load-repo-sources [repo_dirs_root: path repo_names: list<string> source_relative_path: any] {
   if ($source_relative_path | describe) == 'nothing' {
     return {}
   }

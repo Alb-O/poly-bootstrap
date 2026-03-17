@@ -4,11 +4,11 @@ use ../nu/cli.nu [build-sync-spec render-json-status sync-help-requested]
 use ../nu/commands.nu [bootstrap]
 
 def main [
-  repo_root?: string            # Consumer repo root. Defaults to `.`.
-  --source-path (-s): string    # Source YAML path inside the consumer repo.
-  --output-path (-o): string    # Generated override YAML path inside the consumer repo.
-  --polyrepo-root (-p): string  # Explicit polyrepo root when inference is not possible.
-  --repo-dirs-path (-r): string # Path to the sibling repo directory.
+  repo_root?: path              # Consumer repo root. Defaults to `.`.
+  --source-path (-s): path      # Source YAML path inside the consumer repo.
+  --output-path (-o): path      # Generated override YAML path inside the consumer repo.
+  --polyrepo-root (-p): path    # Explicit polyrepo root when inference is not possible.
+  --repo-dirs-path (-r): path   # Path to the sibling repo directory.
   --url-scheme (-u): string     # Override URL scheme: path or git+file.
   --json (-j)                   # Emit structured JSON status instead of silence.
   ...rest: string               # Repeatable include/exclude filters.

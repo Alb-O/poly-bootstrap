@@ -16,7 +16,7 @@ def main [] {
 # The manifest is a JSON mapping with inline YAML text, repo lists, repo source
 # text, include/exclude filters, the repo directory root, and the URL scheme.
 def "main render-manifest" [
-  manifest_path: string # JSON manifest describing one render invocation.
+  manifest_path: path # JSON manifest describing one render invocation.
 ] {
   render-manifest-file $manifest_path
 }
@@ -28,11 +28,11 @@ def "main render-manifest" [
 # Use `sync --help` to view the documented signature even though those
 # repeatable filters are parsed from the wrapped rest arguments.
 def --wrapped "main sync" [
-  repo_root?: string              # Consumer repo root. Defaults to `.`.
-  --source-path (-s): string      # Source YAML path inside the consumer repo.
-  --output-path (-o): string      # Generated override YAML path inside the consumer repo.
-  --polyrepo-root (-p): string    # Explicit polyrepo root when inference is not possible.
-  --repo-dirs-path (-r): string   # Path to the sibling repo directory.
+  repo_root?: path                # Consumer repo root. Defaults to `.`.
+  --source-path (-s): path        # Source YAML path inside the consumer repo.
+  --output-path (-o): path        # Generated override YAML path inside the consumer repo.
+  --polyrepo-root (-p): path      # Explicit polyrepo root when inference is not possible.
+  --repo-dirs-path (-r): path     # Path to the sibling repo directory.
   --url-scheme (-u): string       # Override URL scheme: path or git+file.
   --json (-j)                     # Emit structured JSON status instead of silence.
   ...rest: string                 # Repeatable include/exclude filters.
@@ -49,8 +49,8 @@ def --wrapped "main sync" [
 #
 # Use `--json` for structured output.
 def "main lock-status" [
-  output_path: string # Generated devenv.local.yaml path.
-  lock_path: string   # devenv.lock path to compare against.
+  output_path: path   # Generated devenv.local.yaml path.
+  lock_path: path     # devenv.lock path to compare against.
   --json (-j)         # Emit structured JSON status.
 ] {
   let status = lock-status $output_path $lock_path
