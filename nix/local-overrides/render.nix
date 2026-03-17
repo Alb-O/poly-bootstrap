@@ -19,7 +19,7 @@ in
   }:
   if builtins.pathExists sourcePath then
     builtins.readFile (
-      pkgs.runCommand "local-input-overrides.yaml" {
+      pkgs.runCommand "local-overrides.yaml" {
         nativeBuildInputs = [ pkgs.nushell ];
         passAsFile = [ "manifestJson" ];
         # Pass the full render spec as one manifest file instead of a bundle of

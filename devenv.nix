@@ -105,5 +105,5 @@ in
     })
   ];
 
-  imports = [ ./nix/local-input-overrides ];
+  imports = [ ./nix/local-overrides ];
 }

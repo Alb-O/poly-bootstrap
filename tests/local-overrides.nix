@@ -273,7 +273,7 @@ in
     expr =
       let
         output = runSync {
-          derivationNamePrefix = "local-input-overrides-sync-basic";
+          derivationNamePrefix = "local-overrides-sync-basic";
           fixture = "recursive-polyrepo";
           repoPath = "repos/app";
         };
@@ -297,7 +297,7 @@ in
     expr =
       let
         output = runSync {
-          derivationNamePrefix = "local-input-overrides-sync-filtered";
+          derivationNamePrefix = "local-overrides-sync-filtered";
           fixture = "recursive-polyrepo";
           repoPath = "repos/app";
           extraArgs = [
@@ -320,7 +320,7 @@ in
     expr =
       let
         output = runSync {
-          derivationNamePrefix = "local-input-overrides-sync-removes-stale";
+          derivationNamePrefix = "local-overrides-sync-removes-stale";
           fixture = "no-local-polyrepo";
           repoPath = "repos/app";
           beforeRun = ''
@@ -342,7 +342,7 @@ in
         fixture = fixturePath "recursive-polyrepo";
         rendered = readYaml (
           runRenderManifest {
-            derivationNamePrefix = "local-input-overrides-render-manifest";
+            derivationNamePrefix = "local-overrides-render-manifest";
             manifest = {
               source_yaml_text = builtins.readFile "${fixture}/repos/app/devenv.yaml";
               global_inputs_yaml_text = builtins.readFile "${fixture}/.devenv-global-inputs.yaml";
@@ -377,7 +377,7 @@ in
     expr =
       let
         output = runSyncJson {
-          derivationNamePrefix = "local-input-overrides-sync-json-written";
+          derivationNamePrefix = "local-overrides-sync-json-written";
           fixture = "recursive-polyrepo";
           repoPath = "repos/app";
         };
@@ -395,7 +395,7 @@ in
     expr =
       let
         output = runSyncJson {
-          derivationNamePrefix = "local-input-overrides-sync-json-unchanged";
+          derivationNamePrefix = "local-overrides-sync-json-unchanged";
           fixture = "recursive-polyrepo";
           repoPath = "repos/app";
           prepare = ''
@@ -416,7 +416,7 @@ in
     expr =
       let
         output = runSyncJson {
-          derivationNamePrefix = "local-input-overrides-sync-json-roots";
+          derivationNamePrefix = "local-overrides-sync-json-roots";
           fixture = "recursive-polyrepo";
           repoPath = "repos/app";
         };
@@ -434,7 +434,7 @@ in
     expr =
       let
         output = runSyncJson {
-          derivationNamePrefix = "local-input-overrides-sync-json-removed";
+          derivationNamePrefix = "local-overrides-sync-json-removed";
           fixture = "no-local-polyrepo";
           repoPath = "repos/app";
           beforeSync = ''
@@ -481,7 +481,7 @@ in
     expr =
       let
         output = runBootstrap {
-          derivationNamePrefix = "local-input-overrides-bootstrap-recursive";
+          derivationNamePrefix = "local-overrides-bootstrap-recursive";
           fixture = "recursive-polyrepo";
           repoPath = "repos/app";
         };
@@ -501,7 +501,7 @@ in
     expr =
       let
         output = runModuleSync {
-          derivationNamePrefix = "local-input-overrides-module-sync";
+          derivationNamePrefix = "local-overrides-module-sync";
           fixture = "recursive-polyrepo";
           repoPath = "repos/app";
         };
@@ -539,7 +539,7 @@ in
 
   localInputOverrides."test context throws when polyrepo root cannot be inferred" = {
     expr =
-      import "${repoRoot}/nix/local-input-overrides/context.nix" {
+      import "${repoRoot}/nix/local-overrides/context.nix" {
         inherit lib;
         config = {
           devenv.root = fixturePath "standalone-repo";

@@ -18,6 +18,6 @@ in
   config = lib.mkIf (localInputOverridesText != "") {
     files."${cfg.outputPath}".text = localInputOverridesText;
     outputs.local_input_overrides =
-      pkgs.writeText "local-input-overrides.yaml" localInputOverridesText;
+      pkgs.writeText "local-overrides.yaml" localInputOverridesText;
   };
 }

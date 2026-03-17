@@ -3,7 +3,7 @@
   pkgs,
   repoRoot,
 }:
-import ./local-input-overrides.nix {
+import ./local-overrides.nix {
   inherit
     lib
     pkgs
