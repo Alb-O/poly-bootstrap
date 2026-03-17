@@ -73,6 +73,23 @@ def is-repo-root [path_value: path]: nothing -> bool {
   ($git_path | path exists) or ($devenv_yaml | path exists)
 }
 
+export def find-repo-root [start_path: path]: nothing -> oneof<path, nothing> {
+  mut current = ($start_path | path expand --no-symlink)
+
+  while true {
+    if (is-repo-root $current) {
+      return $current
+    }
+
+    let parent = ($current | path dirname)
+    if $parent == $current {
+      return null
+    }
+
+    $current = $parent
+  }
+}
+
 def infer-polyrepo-root [repo_root: path repo_dirs_path: path]: nothing -> oneof<path, nothing> {
   if ($repo_dirs_path | str starts-with "/") {
     return null

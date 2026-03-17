@@ -1,5 +1,6 @@
 use overrides.nu [build-overrides render-overrides-text]
 use paths.nu [
+  find-repo-root
   list-local-repo-paths
   list-local-repo-names
   load-repo-sources
@@ -149,6 +150,151 @@ def parse-render-manifest [manifest_path: path]: nothing -> record {
   )
 }
 
+def cargo-manifest-path [repo_root: path]: nothing -> oneof<path, nothing> {
+  let manifest_path = (resolve-repo-path $repo_root "Cargo.toml")
+
+  if ($manifest_path | path exists) {
+    return $manifest_path
+  }
+
+  let poly_manifest_path = (resolve-repo-path $repo_root "Cargo.poly.toml")
+
+  if ($poly_manifest_path | path exists) {
+    return $poly_manifest_path
+  }
+}
+
+def managed-cargo-refresh-needed [repo_root: path]: nothing -> bool {
+  let manifest_path = (resolve-repo-path $repo_root "Cargo.toml")
+  let poly_manifest_path = (resolve-repo-path $repo_root "Cargo.poly.toml")
+
+  (not ($manifest_path | path exists)) and ($poly_manifest_path | path exists)
+}
+
+def load-cargo-manifest [manifest_path: path]: nothing -> oneof<record, error> {
+  try {
+    open --raw $manifest_path | from toml
+  } catch {
+    fail $"expected valid TOML in ($manifest_path)"
+  }
+}
+
+def collect-local-dependency-paths [value: any]: nothing -> list<path> {
+  let value_type = ($value | describe)
+
+  if $value_type =~ '^record' {
+    let direct_path = ($value | get -o path)
+    let nested_paths = (
+      $value
+      | values
+      | each {|entry| collect-local-dependency-paths $entry }
+      | flatten
+    )
+
+    [
+      (if (($direct_path | describe) == 'string') { [ $direct_path ] } else { [] })
+      $nested_paths
+    ]
+    | flatten
+  } else if $value_type =~ '^list' {
+    $value
+    | each {|entry| collect-local-dependency-paths $entry }
+    | flatten
+  } else {
+    []
+  }
+}
+
+def list-cargo-dependency-repo-roots [repo_root: path]: nothing -> list<path> {
+  let manifest_path = cargo-manifest-path $repo_root
+
+  if ($manifest_path | describe) == 'nothing' {
+    return []
+  }
+
+  let manifest = load-cargo-manifest $manifest_path
+
+  collect-local-dependency-paths $manifest
+  | each {|dependency_path|
+      let dependency_root = (
+        find-repo-root (resolve-repo-path $repo_root $dependency_path)
+      )
+
+      if (($dependency_root | describe) == 'string') and ($dependency_root != $repo_root) and (($dependency_root | path join "devenv.yaml") | path exists) {
+        $dependency_root
+      }
+    }
+  | compact
+  | uniq
+  | sort
+}
+
+def refresh-generated-files [repo_root: path]: nothing -> nothing {
+  do {
+    cd $repo_root
+    ^devenv tasks --no-tui --no-eval-cache --refresh-eval-cache run devenv:files | ignore
+  }
+}
+
+def bootstrap-recursive [spec: record root_repo_root: path repo_root: path visited_roots: list<string>]: nothing -> record {
+  let normalized_repo_root = ($repo_root | path expand --no-symlink)
+  let root_repo_root = ($root_repo_root | path expand --no-symlink)
+
+  if $normalized_repo_root in $visited_roots {
+    return {
+      status: null
+      visited_roots: $visited_roots
+    }
+  }
+
+  let visited_roots = ($visited_roots | append $normalized_repo_root)
+  let root_status = sync-local-overrides ($spec | merge { repo_root: $normalized_repo_root })
+  let local_repo_roots = (
+    $root_status.local_repo_roots
+    | default []
+    | where {|path| (($path | describe) == 'string') and (not ($path | is-empty)) }
+    | each {|path| $path | path expand --no-symlink }
+  )
+  let cargo_repo_roots = list-cargo-dependency-repo-roots $normalized_repo_root
+  let dependency_repo_roots = (
+    [
+      $local_repo_roots
+      $cargo_repo_roots
+    ]
+    | flatten
+    | uniq
+    | sort
+  )
+  mut recursion_state = {
+    status: $root_status
+    visited_roots: $visited_roots
+  }
+
+  for dependency_repo_root in $dependency_repo_roots {
+    if $dependency_repo_root == $normalized_repo_root {
+      continue
+    }
+
+    $recursion_state = bootstrap-recursive $spec $root_repo_root $dependency_repo_root $recursion_state.visited_roots
+  }
+
+  if (managed-cargo-refresh-needed $normalized_repo_root) {
+    refresh-generated-files $normalized_repo_root
+  }
+
+  if ($normalized_repo_root == $root_repo_root) and (sync-needs-refresh $root_status) {
+    do {
+      cd $normalized_repo_root
+      ^devenv update | ignore
+    }
+  }
+
+  {
+    status: $root_status
+    visited_roots: $recursion_state.visited_roots
+  }
+}
+
 export def render-local-overrides [spec: record]: nothing -> string {
   render-normalized-overrides (normalize-render-spec $spec)
 }
@@ -221,32 +367,8 @@ export def sync-local-overrides [spec: record]: nothing -> record {
 export def bootstrap [spec: record]: nothing -> record {
   let spec = normalize-sync-spec $spec
   let repo_root = ($spec.repo_root | path expand --no-symlink)
-  let root_status = sync-local-overrides ($spec | merge { repo_root: $repo_root })
-  let local_repo_roots = (
-    $root_status.local_repo_roots
-    | default []
-    | where {|path| (($path | describe) == 'string') and (not ($path | is-empty)) }
-    | each {|path| $path | path expand --no-symlink }
-    | uniq
-    | sort
-  )
 
-  for local_repo_root in $local_repo_roots {
-    if $local_repo_root == $repo_root {
-      continue
-    }
-
-    sync-local-overrides ($spec | merge { repo_root: $local_repo_root }) | ignore
-  }
-
-  if (sync-needs-refresh $root_status) {
-    do {
-      cd $repo_root
-      ^devenv update | ignore
-    }
-  }
-
-  $root_status
+  (bootstrap-recursive $spec $repo_root $repo_root []).status
 }
 
 export def render-manifest-file [manifest_path: path]: nothing -> string {

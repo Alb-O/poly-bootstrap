@@ -71,6 +71,11 @@ use devenv
 - `bootstrap` now recursively bootstraps discovered local dependency
   repos before updating the current repo, so cross-repo `A -> B -> C` chains do
   not require users to pre-enter `B` or `C` with `direnv` first.
+- `bootstrap` also scans `Cargo.toml`, falling back to `Cargo.poly.toml`,
+  for local dependency tables with `path = ...` and bootstraps those sibling
+  repos before refreshing generated files with `devenv:files`. This covers
+  managed-Cargo workspaces such as `nusim_app -> nusim_backend -> nusim_core`
+  without manually entering each repo first.
 - `bin/bootstrap-repo.nu` contains the actual bootstrap logic. The
   sibling top-level `bootstrap` Bash file is only a thin launcher
   that `exec`s into `nu` when available, or falls back to the repo-owned pinned

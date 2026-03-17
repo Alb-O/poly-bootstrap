@@ -1,0 +1,5 @@
+[workspace]
+members = ["crates/dep"]
+
+[workspace.dependencies]
+transitive = { path = "../transitive/crates/transitive" }

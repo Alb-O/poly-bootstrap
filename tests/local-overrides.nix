@@ -19,9 +19,24 @@ let
     text = ''
       #!${nu}
 
-      def main [...args: string] {
+      def --wrapped main [...args: string] {
         if (($args | length) > 0) and (($args | get 0) == "update") {
           $"(pwd)\n" | save --append --raw $env.BOOTSTRAP_LOG
+          return
+        }
+
+        if (($args | str join " ") == "tasks --no-tui --no-eval-cache --refresh-eval-cache run devenv:files") {
+          if ("DEVENV_FILES_LOG" in $env) {
+            $"(pwd)\n" | save --append --raw $env.DEVENV_FILES_LOG
+          }
+
+          let manifest_path = (pwd | path join "Cargo.toml")
+          let spec_path = (pwd | path join "Cargo.poly.toml")
+
+          if (not ($manifest_path | path exists)) and ($spec_path | path exists) {
+            open --raw $spec_path | save --force $manifest_path
+          }
+
           return
         }
 
@@ -182,6 +197,7 @@ let
         install -Dm755 ${fakeDevenvScript} "$out/bin/devenv"
         export PATH="$out/bin:$PATH"
         export BOOTSTRAP_LOG="$out/bootstrap.log"
+        export DEVENV_FILES_LOG="$out/devenv-files.log"
         ${pkgs.bash}/bin/bash "${bootstrapScript}" "$repo_path" --polyrepo-root "$out" --repo-dirs-path repos
       '';
     };
@@ -490,6 +506,31 @@ in
       && stripContext depRendered.inputs.docs-shared.url
       == stripContext "path:${output}/repos/poly-docs-env"
       && bootstrapLog == [ "${output}/repos/app" ];
+    expected = true;
+  };
+
+  localInputOverrides."test bootstrap materializes managed Cargo manifests for local path dependency repos" = {
+    expr =
+      let
+        output = runBootstrap {
+          derivationNamePrefix = "local-overrides-bootstrap-cargo-path-deps";
+          fixture = "cargo-path-polyrepo";
+          repoPath = "repos/app";
+        };
+        appManifestExists = builtins.pathExists "${output}/repos/app/Cargo.toml";
+        depManifestExists = builtins.pathExists "${output}/repos/dep/Cargo.toml";
+        transitiveManifestExists = builtins.pathExists "${output}/repos/transitive/Cargo.toml";
+        filesLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/devenv-files.log"));
+      in
+      appManifestExists
+      && depManifestExists
+      && transitiveManifestExists
+      && filesLog
+      == [
+        "${output}/repos/transitive"
+        "${output}/repos/dep"
+        "${output}/repos/app"
+      ];
     expected = true;
   };
 

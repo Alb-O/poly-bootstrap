@@ -1,0 +1,5 @@
+[workspace]
+members = ["crates/app"]
+
+[workspace.dependencies]
+dep = { path = "../dep/crates/dep" }
