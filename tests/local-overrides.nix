@@ -8,6 +8,27 @@ let
   fixtureRoot = "${toString repoRoot}/tests/fixtures";
   fixturePath = name: "${fixtureRoot}/${name}";
   stripContext = builtins.unsafeDiscardStringContext;
+  staleLocalOverridesFile = pkgs.writeText "stale-devenv-local.yaml" ''
+    inputs:
+      stale:
+        url: path:/tmp/stale
+  '';
+  fakeDevenvScript = pkgs.writeTextFile {
+    name = "fake-devenv";
+    executable = true;
+    text = ''
+      #!${nu}
+
+      def main [...args: string] {
+        if (($args | length) > 0) and (($args | get 0) == "update") {
+          $"(pwd)\n" | save --append --raw $env.BOOTSTRAP_LOG
+          return
+        }
+
+        error make { msg: $"unexpected devenv invocation: ($args | str join ' ')" }
+      }
+    '';
+  };
   generatorSource = builtins.path {
     path = repoRoot;
     name = "poly-bootstrap-source";
@@ -158,17 +179,7 @@ let
       inherit derivationNamePrefix fixture repoPath;
       script = ''
         mkdir -p "$out/bin"
-        cat > "$out/bin/devenv" <<'EOF'
-        #!${pkgs.bash}/bin/bash
-        set -euo pipefail
-        if [ "$1" = "update" ]; then
-          pwd >> "$BOOTSTRAP_LOG"
-          exit 0
-        fi
-        echo "unexpected devenv invocation: $*" >&2
-        exit 1
-        EOF
-        chmod +x "$out/bin/devenv"
+        install -Dm755 ${fakeDevenvScript} "$out/bin/devenv"
         export PATH="$out/bin:$PATH"
         export BOOTSTRAP_LOG="$out/bootstrap.log"
         ${pkgs.bash}/bin/bash "${bootstrapScript}" "$repo_path" --polyrepo-root "$out" --repo-dirs-path repos
@@ -317,11 +328,7 @@ in
           fixture = "no-local-polyrepo";
           repoPath = "repos/app";
           beforeRun = ''
-            cat > "$out/repos/app/devenv.local.yaml" <<'EOF'
-            inputs:
-              stale:
-                url: path:/tmp/stale
-            EOF
+            install -Dm644 ${staleLocalOverridesFile} "$out/repos/app/devenv.local.yaml"
           '';
         };
       in
@@ -431,11 +438,7 @@ in
           fixture = "no-local-polyrepo";
           repoPath = "repos/app";
           beforeSync = ''
-            cat > "$out/repos/app/devenv.local.yaml" <<'EOF'
-            inputs:
-              stale:
-                url: path:/tmp/stale
-            EOF
+            install -Dm644 ${staleLocalOverridesFile} "$out/repos/app/devenv.local.yaml"
           '';
         };
         status = readJson "${output}/status.json";

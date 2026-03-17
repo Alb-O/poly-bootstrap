@@ -98,10 +98,7 @@ in
         '';
       };
 
-      enterTest = ''
-        set -euo pipefail
-        run-nix-tests
-      '';
+      enterTest = "run-nix-tests";
     })
   ];
 
