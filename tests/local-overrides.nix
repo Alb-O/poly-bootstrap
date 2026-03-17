@@ -4,7 +4,6 @@
   repoRoot,
 }:
 let
-  pythonWithYaml = pkgs.python3.withPackages (ps: [ ps.pyyaml ]);
   nu = lib.getExe pkgs.nushell;
   fixtureRoot = "${toString repoRoot}/tests/fixtures";
   fixturePath = name: "${fixtureRoot}/${name}";
@@ -24,20 +23,20 @@ let
         builtins.readFile (
         pkgs.runCommand "poly-bootstrap-yaml-to-json"
           {
-            nativeBuildInputs = [ pythonWithYaml ];
+            nativeBuildInputs = [ pkgs.nushell ];
             pathString = path;
             passAsFile = [ "yamlText" ];
             yamlText = builtins.readFile path;
           }
           ''
-            python3 - <<'PY' > "$out"
-            import json
-            import os
-            import yaml
-
-            document = yaml.safe_load(os.environ["yamlTextPath"] and open(os.environ["yamlTextPath"], encoding="utf-8").read()) or {}
-            print(json.dumps(document, sort_keys=True))
-            PY
+            ${nu} -c '
+              let raw = (open --raw $env.yamlTextPath)
+              if ($raw | str trim | is-empty) {
+                {}
+              } else {
+                $raw | from yaml
+              } | to json --raw
+            ' > "$out"
           ''
         )
       )
@@ -56,10 +55,7 @@ let
     }:
     pkgs.runCommand derivationNamePrefix
       {
-        nativeBuildInputs = [
-          pkgs.nushell
-          pythonWithYaml
-        ];
+        nativeBuildInputs = [ pkgs.nushell ];
         fixtureSource = builtins.path {
           path = fixturePath fixture;
           name = "${derivationNamePrefix}-fixture";
@@ -128,10 +124,7 @@ let
     }:
     pkgs.runCommand derivationNamePrefix
       {
-        nativeBuildInputs = [
-          pkgs.nushell
-          pythonWithYaml
-        ];
+        nativeBuildInputs = [ pkgs.nushell ];
         fixtureSource = builtins.path {
           path = fixturePath fixture;
           name = "${derivationNamePrefix}-fixture";
