@@ -6,7 +6,7 @@ let
     path = ../..;
     name = "poly-bootstrap-source";
   };
-  localInputOverridesScript = "${localInputOverridesSource}/bin/poly-bootstrap.nu";
+  localInputOverridesScript = "${localInputOverridesSource}/bin/local-overrides.nu";
 in
 (
   {

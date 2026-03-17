@@ -16,9 +16,9 @@ overrides for both `B` and `C`.
 
 ## Public Interfaces
 
-- Human CLI: `bin/poly-bootstrap.nu sync`
-- Bootstrap CLI: `bin/bootstrap.nu`
-- Machine CLI: `bin/poly-bootstrap.nu render-manifest <manifest.json>`
+- Human CLI: `bin/local-overrides.nu sync`
+- Bootstrap CLI: `bin/bootstrap-repo.nu`
+- Machine CLI: `bin/local-overrides.nu render-manifest <manifest.json>`
 - Supported Nushell module: `use nu/mod.nu [bootstrap render-local-overrides sync-local-overrides lock-status]`
 
 ## Testing
@@ -69,7 +69,7 @@ use devenv
 - `bootstrap` now recursively bootstraps discovered local dependency
   repos before updating the current repo, so cross-repo `A -> B -> C` chains do
   not require users to pre-enter `B` or `C` with `direnv` first.
-- `bin/bootstrap.nu` contains the actual bootstrap logic. The
+- `bin/bootstrap-repo.nu` contains the actual bootstrap logic. The
   sibling top-level `bootstrap` Bash file is only a thin launcher
   that `exec`s into `nu` when available, or falls back to the repo-owned pinned
   bootstrap environment under `nix/flake-bootstrap/`.
@@ -101,25 +101,25 @@ should set it explicitly.
 Normal repo update:
 
 ```bash
-nu bin/poly-bootstrap.nu sync .
+nu bin/local-overrides.nu sync .
 ```
 
 Bootstrap a repo before `devenv` starts:
 
 ```bash
-nu bin/bootstrap.nu .
+nu bin/bootstrap-repo.nu .
 ```
 
 Structured status for automation:
 
 ```bash
-nu bin/poly-bootstrap.nu sync --json .
+nu bin/local-overrides.nu sync --json .
 ```
 
 Machine render from one manifest file:
 
 ```bash
-nu bin/poly-bootstrap.nu render-manifest render-spec.json
+nu bin/local-overrides.nu render-manifest render-spec.json
 ```
 
 Manifest shape:

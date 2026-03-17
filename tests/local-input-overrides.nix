@@ -13,7 +13,7 @@ let
     path = repoRoot;
     name = "poly-bootstrap-source";
   };
-  generatorScript = "${generatorSource}/bin/poly-bootstrap.nu";
+  generatorScript = "${generatorSource}/bin/local-overrides.nu";
   bootstrapScript = "${generatorSource}/bootstrap";
   localInputOverridesModule = import "${repoRoot}/devenv.nix";
 
