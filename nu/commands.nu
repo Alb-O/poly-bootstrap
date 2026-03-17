@@ -159,16 +159,14 @@ export def sync-local-overrides [spec: record] {
   let source_relative_path = maybe-relativize $source_yaml_path $repo_root
   let repo_names = list-local-repo-names $repo_dirs_root $spec.include_repos $spec.exclude_repos
   let repo_sources = load-repo-sources $repo_dirs_root $repo_names $source_relative_path
-  let overrides_text = render-normalized-overrides {
-    source_yaml_text: $source_yaml_text
-    global_inputs_yaml_text: $global_inputs_yaml_text
-    local_repo_names: $repo_names
-    repo_sources: $repo_sources
-    include_inputs: $spec.include_inputs
-    exclude_inputs: $spec.exclude_inputs
-    repo_dirs_root: $repo_dirs_root
-    url_scheme: $spec.url_scheme
-  }
+  let rendered = build-overrides $source_yaml_text $global_inputs_yaml_text $repo_names $repo_sources $spec.include_inputs $spec.exclude_inputs $repo_dirs_root $spec.url_scheme
+  let overrides_text = render-overrides-text $rendered.overrides $rendered.imports
+  let local_repo_roots = (
+    $rendered.local_repo_names
+    | each {|repo_name| ($repo_dirs_root | path join $repo_name) }
+  )
+  let local_repo_names = $rendered.local_repo_names
+  let local_repo_count = ($local_repo_names | length)
 
   let existing_text = if ($output_yaml_path | path exists) {
     open --raw $output_yaml_path
@@ -197,6 +195,9 @@ export def sync-local-overrides [spec: record] {
     mode: $mode
     changed: ($mode != "unchanged")
     removed: ($mode == "removed")
+    local_repo_names: $local_repo_names
+    local_repo_roots: $local_repo_roots
+    local_repo_count: $local_repo_count
     lock_status: $lock_status
     lock_refresh_needed: (not $lock_status.clean)
   }

@@ -14,6 +14,7 @@ let
     name = "poly-local-inputs-source";
   };
   generatorScript = "${generatorSource}/poly-local-inputs.nu";
+  bootstrapScript = "${generatorSource}/bootstrap-local-inputs";
   localInputOverridesModule = import "${repoRoot}/devenv.nix";
 
   readYaml =
@@ -153,6 +154,33 @@ let
           } | to json --raw
         ' > "$out/status.json"
       '';
+
+  runBootstrap =
+    {
+      derivationNamePrefix,
+      fixture,
+      repoPath,
+    }:
+    runFixture {
+      inherit derivationNamePrefix fixture repoPath;
+      script = ''
+        mkdir -p "$out/bin"
+        cat > "$out/bin/devenv" <<'EOF'
+        #!${pkgs.bash}/bin/bash
+        set -euo pipefail
+        if [ "$1" = "update" ]; then
+          pwd >> "$BOOTSTRAP_LOG"
+          exit 0
+        fi
+        echo "unexpected devenv invocation: $*" >&2
+        exit 1
+        EOF
+        chmod +x "$out/bin/devenv"
+        export PATH="$out/bin:$PATH"
+        export BOOTSTRAP_LOG="$out/bootstrap.log"
+        ${pkgs.bash}/bin/bash "${bootstrapScript}" "$repo_path" --polyrepo-root "$out" --repo-dirs-path repos
+      '';
+    };
 
   supportOptionsModule =
     { lib, ... }:
@@ -384,6 +412,24 @@ in
     expected = true;
   };
 
+  localInputOverrides."test sync json exposes discovered local repo roots" = {
+    expr =
+      let
+        output = runSyncJson {
+          derivationNamePrefix = "local-input-overrides-sync-json-roots";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/app";
+        };
+        status = readJson "${output}/status.json";
+      in
+      status.local_repo_count == 2
+      && status.local_repo_names == [
+        "agent-scripts"
+        "poly-docs-env"
+      ];
+    expected = true;
+  };
+
   localInputOverrides."test sync json reports removed status for stale output cleanup" = {
     expr =
       let
@@ -428,6 +474,26 @@ in
         "docs-shared/subdir"
         "agent-scripts/tooling"
       ];
+    expected = true;
+  };
+
+  localInputOverrides."test bootstrap recurses into local dependency repos before update" = {
+    expr =
+      let
+        output = runBootstrap {
+          derivationNamePrefix = "local-input-overrides-bootstrap-recursive";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/app";
+        };
+        appRendered = readYaml "${output}/repos/app/devenv.local.yaml";
+        depRendered = readYaml "${output}/repos/agent-scripts/devenv.local.yaml";
+        bootstrapLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/bootstrap.log"));
+      in
+      stripContext appRendered.inputs.agent-scripts.url
+      == stripContext "path:${output}/repos/agent-scripts"
+      && stripContext depRendered.inputs.docs-shared.url
+      == stripContext "path:${output}/repos/poly-docs-env"
+      && bootstrapLog == [ "${output}/repos/app" ];
     expected = true;
   };
 

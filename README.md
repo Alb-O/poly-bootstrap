@@ -65,6 +65,9 @@ use devenv
   inputs and the current lockfile root inputs drift, even if `devenv.local.yaml`
   itself did not change. It now decides that from `sync --json` status instead
   of reparsing CLI text output.
+- `bootstrap-local-inputs` now recursively bootstraps discovered local dependency
+  repos before updating the current repo, so cross-repo `A -> B -> C` chains do
+  not require users to pre-enter `B` or `C` with `direnv` first.
 - `bootstrap-local-inputs` prefers an existing `nu`. If Nushell is not already
   available, it falls back to a repo-owned pinned bootstrap environment under
   `nix/flake-bootstrap/`, so users do not need to edit global Nix

@@ -5,6 +5,12 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${1:-.}"
 nu_script="$script_dir/poly-local-inputs.nu"
 
+if [ $# -gt 0 ]; then
+  shift
+fi
+
+repo_root="$(cd "$repo_root" && pwd)"
+
 run_nu() {
   if command -v nu >/dev/null 2>&1; then
     nu "$@"
@@ -19,18 +25,44 @@ run_sync_json() {
   run_nu "$nu_script" sync --json "$@"
 }
 
-sync_status_json="$(run_sync_json "$@")"
+list_local_repo_roots() {
+  if [ -z "${1:-}" ]; then
+    return 0
+  fi
 
-if [ -z "$sync_status_json" ]; then
-  refresh_needed=0
-else
-  refresh_needed="$(
-    SYNC_STATUS_JSON="$sync_status_json" run_nu -c '
-      let status = ($env.SYNC_STATUS_JSON | from json)
-      if ($status.changed or $status.lock_refresh_needed) { "1" } else { "0" }
-    '
-  )"
-fi
+  SYNC_STATUS_JSON="$1" run_nu -c '
+    let status = ($env.SYNC_STATUS_JSON | from json)
+    ($status | get -o local_repo_roots | default [])
+      | each {|path|
+          if (($path | describe) == "string") and (not ($path | is-empty)) {
+            $path
+          }
+        }
+      | str join (char newline)
+  '
+}
+
+sync_needs_refresh() {
+  if [ -z "${1:-}" ]; then
+    printf '0\n'
+    return 0
+  fi
+
+  SYNC_STATUS_JSON="$1" run_nu -c '
+    let status = ($env.SYNC_STATUS_JSON | from json)
+    if ($status.changed or $status.lock_refresh_needed) { "1" } else { "0" }
+  '
+}
+
+sync_status_json="$(run_sync_json "$repo_root" "$@")"
+
+while IFS= read -r local_repo_root; do
+  if [ -n "$local_repo_root" ] && [ "$local_repo_root" != "$repo_root" ]; then
+    run_sync_json "$local_repo_root" "$@" >/dev/null
+  fi
+done < <(list_local_repo_roots "$sync_status_json")
+
+refresh_needed="$(sync_needs_refresh "$sync_status_json")"
 
 if [ "$refresh_needed" -eq 1 ]; then
   (

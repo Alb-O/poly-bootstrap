@@ -68,6 +68,7 @@ export def build-overrides [
   }
 
   mut overrides = {}
+  mut local_repo_names_used = []
   mut pending_sources = [
     {
       source_label: "root source"
@@ -124,6 +125,7 @@ export def build-overrides [
       let local_repo_path = ($repo_dirs_root | path join $repo_name)
       let copied_spec = ($input_spec.spec | merge { url: $"($url_prefix)($local_repo_path)" })
       $overrides = add-override $overrides $input_name $copied_spec $current.source_label
+      $local_repo_names_used = ($local_repo_names_used | append $repo_name)
 
       if $repo_name in $visited_repo_names {
         continue
@@ -150,6 +152,7 @@ export def build-overrides [
   {
     overrides: $overrides
     imports: (collect-global-imports $global_imports $include_inputs $exclude_inputs $effective_input_names)
+    local_repo_names: ($local_repo_names_used | uniq | sort)
   }
 }
 
