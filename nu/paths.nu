@@ -66,6 +66,13 @@ export def resolve-repo-dirs-root [polyrepo_root: path repo_dirs_path: path]: no
   resolve-repo-path $polyrepo_root $repo_dirs_path
 }
 
+def is-repo-root [path_value: path]: nothing -> bool {
+  let git_path = ($path_value | path join ".git")
+  let devenv_yaml = ($path_value | path join "devenv.yaml")
+
+  ($git_path | path exists) or ($devenv_yaml | path exists)
+}
+
 def infer-polyrepo-root [repo_root: path repo_dirs_path: path]: nothing -> oneof<path, nothing> {
   if ($repo_dirs_path | str starts-with "/") {
     return null
@@ -73,18 +80,30 @@ def infer-polyrepo-root [repo_root: path repo_dirs_path: path]: nothing -> oneof
 
   let repo_root = ($repo_root | path expand --no-symlink)
   let repo_parent = ($repo_root | path dirname)
+  let repo_grandparent = ($repo_parent | path dirname)
   let repo_dirs_segments = normalize-segments $repo_dirs_path
-  let repo_dirs_parent = dirname-n ($repo_dirs_segments | length) $repo_parent
-  let candidate_repo_dirs_root = if ($repo_dirs_segments | is-empty) {
-    $repo_dirs_parent
+  let direct_polyrepo_root = dirname-n (($repo_dirs_segments | length) + 1) $repo_root
+  let grouped_polyrepo_root = dirname-n (($repo_dirs_segments | length) + 2) $repo_root
+  let direct_candidate_repo_dirs_root = if ($repo_dirs_segments | is-empty) {
+    $direct_polyrepo_root
   } else {
-    ($repo_dirs_parent | path join $repo_dirs_path) | path expand --no-symlink
+    ($direct_polyrepo_root | path join $repo_dirs_path) | path expand --no-symlink
+  }
+  let grouped_candidate_repo_dirs_root = if ($repo_dirs_segments | is-empty) {
+    $grouped_polyrepo_root
+  } else {
+    ($grouped_polyrepo_root | path join $repo_dirs_path) | path expand --no-symlink
   }
 
-  # Inference is only valid when the current repo really lives immediately under
-  # the configured repo-dirs root, e.g. `<polyrepo>/<repoDirsPath>/<repo>`.
-  if $repo_parent == $candidate_repo_dirs_root {
-    $repo_dirs_parent
+  # Inference is valid when the current repo lives directly under the configured
+  # repo-dirs root, or one group-directory below it, e.g.
+  # `<polyrepo>/<repoDirsPath>/<repo>` or `<polyrepo>/<repoDirsPath>/<group>/<repo>`.
+  if $repo_parent == $direct_candidate_repo_dirs_root {
+    return $direct_polyrepo_root
+  }
+
+  if $repo_grandparent == $grouped_candidate_repo_dirs_root {
+    return $grouped_polyrepo_root
   }
 }
 
@@ -114,35 +133,74 @@ export def maybe-relativize [target_path: path root: path]: nothing -> oneof<pat
   }
 }
 
-export def list-local-repo-names [repo_dirs_root: path include_repos: list<string> exclude_repos: list<string>]: nothing -> list<string> {
-  let repo_entries = if ($repo_dirs_root | path exists) {
-    ls $repo_dirs_root
-  } else {
-    []
+export def list-local-repo-paths [repo_dirs_root: path include_repos: list<string> exclude_repos: list<string>]: nothing -> record {
+  let repo_entries = if ($repo_dirs_root | path exists) { ls $repo_dirs_root } else { [] }
+  mut repo_roots = []
+
+  for entry in ($repo_entries | where type == dir) {
+    let direct_path = ($entry | get name)
+
+    if (is-repo-root $direct_path) {
+      $repo_roots = ($repo_roots | append { name: ($direct_path | path basename), path: $direct_path })
+      continue
+    }
+
+    let nested_entries = if ($direct_path | path exists) { ls $direct_path } else { [] }
+
+    for nested_entry in ($nested_entries | where type == dir) {
+      let nested_path = ($nested_entry | get name)
+
+      if (is-repo-root $nested_path) {
+        $repo_roots = ($repo_roots | append { name: ($nested_path | path basename), path: $nested_path })
+      }
+    }
   }
 
-  $repo_entries
-  | where type == dir
-  | get name
-  | each {|path| $path | path basename }
-  | where {|repo_name|
-      (($include_repos | is-empty) or ($repo_name in $include_repos)) and (not ($repo_name in $exclude_repos))
-    }
-  | uniq
-  | sort
+  let filtered = (
+    $repo_roots
+    | where {|repo|
+        (($include_repos | is-empty) or ($repo.name in $include_repos)) and (not ($repo.name in $exclude_repos))
+      }
+  )
+  let duplicate_names = (
+    $filtered
+    | group-by name
+    | transpose name entries
+    | where {|group| (($group.entries | length) > 1) }
+  )
+
+  if not ($duplicate_names | is-empty) {
+    let duplicate_list = (
+      $duplicate_names
+      | each {|group| $group.name }
+      | sort
+      | str join ", "
+    )
+    fail $"multiple local repos share the same basename under ($repo_dirs_root): ($duplicate_list)"
+  }
+
+  $filtered
+  | sort-by name
+  | each {|repo| [$repo.name (($repo.path | path expand --no-symlink) | into string)] }
+  | into record
 }
 
-export def load-repo-sources [repo_dirs_root: path repo_names: list<string> source_relative_path: any]: nothing -> record {
+export def list-local-repo-names [repo_dirs_root: path include_repos: list<string> exclude_repos: list<string>]: nothing -> list<string> {
+  list-local-repo-paths $repo_dirs_root $include_repos $exclude_repos | columns | sort
+}
+
+export def load-repo-sources [local_repo_paths: record source_relative_path: any]: nothing -> record {
   if ($source_relative_path | describe) == 'nothing' {
     return {}
   }
 
-  $repo_names
-  | each {|repo_name|
-      let nested_path = ($repo_dirs_root | path join $repo_name | path join $source_relative_path)
+  $local_repo_paths
+  | transpose repo_name repo_root
+  | each {|repo|
+      let nested_path = ($repo.repo_root | path join $source_relative_path)
 
       if ($nested_path | path exists) {
-        [$repo_name (open --raw $nested_path)]
+        [$repo.repo_name (open --raw $nested_path)]
       }
     }
   | compact

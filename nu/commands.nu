@@ -1,5 +1,6 @@
 use overrides.nu [build-overrides render-overrides-text]
 use paths.nu [
+  list-local-repo-paths
   list-local-repo-names
   load-repo-sources
   maybe-relativize
@@ -39,7 +40,7 @@ def validate-url-scheme [url_scheme: string]: nothing -> oneof<nothing, error> {
 }
 
 def render-normalized-overrides [spec: record]: nothing -> string {
-  let rendered = build-overrides $spec.source_yaml_text $spec.global_inputs_yaml_text $spec.local_repo_names $spec.repo_sources $spec.include_inputs $spec.exclude_inputs $spec.repo_dirs_root $spec.url_scheme
+  let rendered = build-overrides $spec.source_yaml_text $spec.global_inputs_yaml_text $spec.local_repo_names $spec.local_repo_paths $spec.repo_sources $spec.include_inputs $spec.exclude_inputs $spec.repo_dirs_root $spec.url_scheme
   render-overrides-text $rendered.overrides $rendered.imports
 }
 
@@ -50,6 +51,7 @@ def normalize-render-spec [spec: record]: nothing -> record {
     {
       global_inputs_yaml_text: ""
       local_repo_names: []
+      local_repo_paths: {}
       repo_sources: {}
       include_inputs: []
       exclude_inputs: []
@@ -60,6 +62,7 @@ def normalize-render-spec [spec: record]: nothing -> record {
   let source_yaml_text = require-string ($spec | get -o source_yaml_text) "source_yaml_text"
   let global_inputs_yaml_text = require-string ($spec | get -o global_inputs_yaml_text) "global_inputs_yaml_text"
   let local_repo_names = expect-string-list ($spec | get -o local_repo_names | default []) "local_repo_names"
+  let local_repo_paths = expect-string-record ($spec | get -o local_repo_paths | default {}) "local_repo_paths"
   let repo_sources = expect-string-record ($spec | get -o repo_sources | default {}) "repo_sources"
   let include_inputs = expect-string-list ($spec | get -o include_inputs | default []) "include_inputs"
   let exclude_inputs = expect-string-list ($spec | get -o exclude_inputs | default []) "exclude_inputs"
@@ -73,6 +76,7 @@ def normalize-render-spec [spec: record]: nothing -> record {
     source_yaml_text: $source_yaml_text
     global_inputs_yaml_text: $global_inputs_yaml_text
     local_repo_names: $local_repo_names
+    local_repo_paths: $local_repo_paths
     repo_sources: $repo_sources
     include_inputs: $include_inputs
     exclude_inputs: $exclude_inputs
@@ -169,13 +173,14 @@ export def sync-local-overrides [spec: record]: nothing -> record {
   # Recursive scans only reuse the same repo-relative source path in sibling
   # repos. Absolute or unrelated paths intentionally disable that recursion.
   let source_relative_path = maybe-relativize $source_yaml_path $repo_root
-  let repo_names = list-local-repo-names $repo_dirs_root $spec.include_repos $spec.exclude_repos
-  let repo_sources = load-repo-sources $repo_dirs_root $repo_names $source_relative_path
-  let rendered = build-overrides $source_yaml_text $global_inputs_yaml_text $repo_names $repo_sources $spec.include_inputs $spec.exclude_inputs $repo_dirs_root $spec.url_scheme
+  let local_repo_paths = list-local-repo-paths $repo_dirs_root $spec.include_repos $spec.exclude_repos
+  let repo_names = ($local_repo_paths | columns | sort)
+  let repo_sources = load-repo-sources $local_repo_paths $source_relative_path
+  let rendered = build-overrides $source_yaml_text $global_inputs_yaml_text $repo_names $local_repo_paths $repo_sources $spec.include_inputs $spec.exclude_inputs $repo_dirs_root $spec.url_scheme
   let overrides_text = render-overrides-text $rendered.overrides $rendered.imports
   let local_repo_roots = (
     $rendered.local_repo_names
-    | each {|repo_name| ($repo_dirs_root | path join $repo_name) }
+    | each {|repo_name| $local_repo_paths | get $repo_name }
   )
   let local_repo_names = $rendered.local_repo_names
   let local_repo_count = ($local_repo_names | length)

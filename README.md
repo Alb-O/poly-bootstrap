@@ -1,7 +1,7 @@
 # Poly Bootstrap
 
 Reusable `devenv` module that generates `devenv.local.yaml` with local path overrides
-for inputs in `devenv.yaml` whose remote repo name matches a local directory name
+for inputs in `devenv.yaml` whose remote repo name matches a local repo discovered
 under the consumer repo directory configured by `composer.localInputOverrides.repoDirsPath`.
 
 It also walks local repos transitively. If repo `A` imports local repo `B`, and
@@ -53,12 +53,14 @@ devenv shell --no-tui -- bash -lc 'run-nix-tests'
 - Use the pre-bootstrap helper before `use devenv`:
 
 ```bash
-if [ -x ../poly-bootstrap/bootstrap ]; then
-  ../poly-bootstrap/bootstrap .
-fi
+source_up_if_exists .envrc
 eval "$(devenv direnvrc)"
 use devenv
 ```
+
+- Repo discovery scans direct children of `repoDirsPath`, and if a child is not
+  itself a repo root, it scans that child one level deeper. This supports grouped
+  layouts such as `repos/nusim/nusim_app` without doing a deep recursive walk.
 
 - Existing stale `devenv.local.yaml` files still need one refresh before newly
   discovered transitive overrides can affect the next evaluation.
@@ -93,7 +95,7 @@ composer.localInputOverrides = {
 ```
 
 When the current repo already lives under `${polyrepoRoot}/${repoDirsPath}/...`,
-`polyrepoRoot` can usually be omitted and inferred. Top-level polyrepo configs
+or one grouping directory below it, `polyrepoRoot` can usually be omitted and inferred. Top-level polyrepo configs
 should set it explicitly.
 
 ## CLI

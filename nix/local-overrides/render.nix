@@ -14,6 +14,7 @@ in
     globalInputsText,
     repoDirsRoot,
     repoNames,
+    repoPaths,
     repoSources,
     sourcePath,
   }:
@@ -28,6 +29,7 @@ in
           source_yaml_text = builtins.readFile sourcePath;
           global_inputs_yaml_text = globalInputsText;
           local_repo_names = repoNames;
+          local_repo_paths = repoPaths;
           repo_sources = repoSources;
           include_inputs = cfg.includeInputs;
           exclude_inputs = cfg.excludeInputs;

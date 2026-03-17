@@ -17,20 +17,36 @@ let
     if lib.hasPrefix "/" cfg.repoDirsPath
     then [ ]
     else normalizeSegments cfg.repoDirsPath;
+  isRepoRoot =
+    path:
+    builtins.pathExists "${path}/.git"
+    || builtins.pathExists "${path}/devenv.yaml";
   inferredPolyrepoRoot =
     if lib.hasPrefix "/" cfg.repoDirsPath then
       null
     else
       let
         repoParent = dirOf currentRoot;
-        repoDirsParent = dirnameN (lib.length repoDirsSegments) repoParent;
-        candidateRepoDirsRoot =
+        repoGrandparent = dirOf repoParent;
+        directPolyrepoRoot = dirnameN ((lib.length repoDirsSegments) + 1) currentRoot;
+        groupedPolyrepoRoot = dirnameN ((lib.length repoDirsSegments) + 2) currentRoot;
+        directCandidateRepoDirsRoot =
           if repoDirsSegments == [ ] then
-            repoDirsParent
+            directPolyrepoRoot
           else
-            "${repoDirsParent}/${cfg.repoDirsPath}";
+            "${directPolyrepoRoot}/${cfg.repoDirsPath}";
+        groupedCandidateRepoDirsRoot =
+          if repoDirsSegments == [ ] then
+            groupedPolyrepoRoot
+          else
+            "${groupedPolyrepoRoot}/${cfg.repoDirsPath}";
       in
-      if repoParent == candidateRepoDirsRoot then repoDirsParent else null;
+      if repoParent == directCandidateRepoDirsRoot then
+        directPolyrepoRoot
+      else if repoGrandparent == groupedCandidateRepoDirsRoot then
+        groupedPolyrepoRoot
+      else
+        null;
   polyrepoRoot =
     if cfg.polyrepoRoot != null then
       if lib.hasPrefix "/" cfg.polyrepoRoot then cfg.polyrepoRoot else "${currentRoot}/${cfg.polyrepoRoot}"
@@ -54,14 +70,56 @@ let
     if builtins.pathExists repoDirsRoot
     then builtins.readDir repoDirsRoot
     else { };
-  allRepoNames = lib.filter (
-    repoName: builtins.getAttr repoName repoEntries == "directory"
-  ) (builtins.attrNames repoEntries);
-  repoNames = lib.filter (
-    repoName:
-    (includeRepos == [ ] || builtins.elem repoName includeRepos)
-    && !(builtins.elem repoName excludeRepos)
-  ) allRepoNames;
+  discoveredRepoRoots =
+    lib.concatMap (
+      entryName:
+      let
+        entryType = builtins.getAttr entryName repoEntries;
+        entryPath = "${repoDirsRoot}/${entryName}";
+      in
+      if entryType != "directory" then
+        [ ]
+      else if isRepoRoot entryPath then
+        [ { name = entryName; path = entryPath; } ]
+      else
+        let
+          nestedEntries =
+            if builtins.pathExists entryPath
+            then builtins.readDir entryPath
+            else { };
+        in
+        lib.concatMap (
+          nestedName:
+          let
+            nestedType = builtins.getAttr nestedName nestedEntries;
+            nestedPath = "${entryPath}/${nestedName}";
+          in
+          if nestedType == "directory" && isRepoRoot nestedPath then
+            [ { name = nestedName; path = nestedPath; } ]
+          else
+            [ ]
+        ) (builtins.attrNames nestedEntries)
+    ) (builtins.attrNames repoEntries);
+  filteredRepoRoots = lib.filter (
+    repo:
+    (includeRepos == [ ] || builtins.elem repo.name includeRepos)
+    && !(builtins.elem repo.name excludeRepos)
+  ) discoveredRepoRoots;
+  duplicateRepoNames =
+    lib.filter (repoName: (lib.length (lib.filter (repo: repo.name == repoName) filteredRepoRoots)) > 1)
+      (lib.unique (map (repo: repo.name) filteredRepoRoots));
+  _checkDuplicateRepoNames =
+    if duplicateRepoNames == [ ] then
+      null
+    else
+      throw "multiple local repos share the same basename under composer.localInputOverrides.repoDirsPath: ${lib.concatStringsSep ", " duplicateRepoNames}";
+  repoPathPairs =
+    let
+      _ = _checkDuplicateRepoNames;
+    in
+    map (repo: lib.nameValuePair repo.name repo.path) filteredRepoRoots;
+  repoPaths = builtins.listToAttrs repoPathPairs;
+  repoNames = lib.sort builtins.lessThan (builtins.attrNames repoPaths);
   # Keep recursive scans repo-relative; unrelated absolute paths stay disabled.
   sourceRelativePath =
     if lib.hasPrefix "${currentRoot}/" sourcePath then
@@ -79,7 +137,7 @@ let
             if sourceRelativePath == null then
               null
             else
-              "${repoDirsRoot}/${repoName}/${sourceRelativePath}";
+              "${builtins.getAttr repoName repoPaths}/${sourceRelativePath}";
         in
         if repoSourcePath != null && builtins.pathExists repoSourcePath then
           {
@@ -93,7 +151,7 @@ let
   );
 in
 {
-  inherit globalInputsPath polyrepoRoot repoDirsRoot repoNames repoSources sourcePath;
+  inherit globalInputsPath polyrepoRoot repoDirsRoot repoNames repoPaths repoSources sourcePath;
   globalInputsText =
     if builtins.pathExists globalInputsPath
     then builtins.readFile globalInputsPath

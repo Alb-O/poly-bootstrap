@@ -51,6 +51,7 @@ export def build-overrides [
   source_yaml_text: string
   global_inputs_yaml_text: string
   local_repo_names: list<string>
+  local_repo_paths: record
   repo_sources: record
   include_inputs: list<string>
   exclude_inputs: list<string>
@@ -126,7 +127,7 @@ export def build-overrides [
         }
       }
 
-      let local_repo_path = ($repo_dirs_root | path join $repo_name)
+      let local_repo_path = ($local_repo_paths | get -o $repo_name | default (($repo_dirs_root | path join $repo_name) | into string))
       let copied_spec = ($input_spec.spec | merge { url: $"($url_prefix)($local_repo_path)" })
       $overrides = add-override $overrides $input_name $copied_spec $current.source_label
       $local_repo_names_used = ($local_repo_names_used | append $repo_name)
