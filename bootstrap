@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+nu_script="$script_dir/bin/bootstrap.nu"
+
+if command -v nu >/dev/null 2>&1; then
+  exec nu "$nu_script" "$@"
+fi
+
+exec nix --extra-experimental-features 'nix-command flakes' \
+  shell "path:${script_dir}/nix/flake-bootstrap#nushell" \
+  -c nu "$nu_script" "$@"

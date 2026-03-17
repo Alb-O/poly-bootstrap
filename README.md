@@ -1,4 +1,4 @@
-# Local Input Overrides
+# Poly Bootstrap
 
 Reusable `devenv` module that generates `devenv.local.yaml` with local path overrides
 for inputs in `devenv.yaml` whose remote repo name matches a local directory name
@@ -16,9 +16,10 @@ overrides for both `B` and `C`.
 
 ## Public Interfaces
 
-- Human CLI: `poly-local-inputs.nu sync`
-- Machine CLI: `poly-local-inputs.nu render-manifest <manifest.json>`
-- Supported Nushell module: `use nu/mod.nu [render-local-overrides sync-local-overrides lock-status]`
+- Human CLI: `bin/poly-bootstrap.nu sync`
+- Bootstrap CLI: `bin/bootstrap.nu`
+- Machine CLI: `bin/poly-bootstrap.nu render-manifest <manifest.json>`
+- Supported Nushell module: `use nu/mod.nu [bootstrap render-local-overrides sync-local-overrides lock-status]`
 
 ## Testing
 
@@ -52,8 +53,8 @@ devenv shell --no-tui -- bash -lc 'run-nix-tests'
 - Use the pre-bootstrap helper before `use devenv`:
 
 ```bash
-if [ -x ../poly-local-inputs/bootstrap-local-inputs ]; then
-  ../poly-local-inputs/bootstrap-local-inputs .
+if [ -x ../poly-bootstrap/bootstrap ]; then
+  ../poly-bootstrap/bootstrap .
 fi
 eval "$(devenv direnvrc)"
 use devenv
@@ -61,27 +62,27 @@ use devenv
 
 - Existing stale `devenv.local.yaml` files still need one refresh before newly
   discovered transitive overrides can affect the next evaluation.
-- `bootstrap-local-inputs` also refreshes `devenv.lock` when the generated local
+- `bootstrap` also refreshes `devenv.lock` when the generated local
   inputs and the current lockfile root inputs drift, even if `devenv.local.yaml`
   itself did not change. It now decides that from `sync --json` status instead
   of reparsing CLI text output.
-- `bootstrap-local-inputs` now recursively bootstraps discovered local dependency
+- `bootstrap` now recursively bootstraps discovered local dependency
   repos before updating the current repo, so cross-repo `A -> B -> C` chains do
   not require users to pre-enter `B` or `C` with `direnv` first.
-- `bootstrap-local-inputs` prefers an existing `nu`. If Nushell is not already
-  available, it falls back to a repo-owned pinned bootstrap environment under
-  `nix/flake-bootstrap/`, so users do not need to edit global Nix
-  configuration first.
+- `bin/bootstrap.nu` contains the actual bootstrap logic. The
+  sibling top-level `bootstrap` Bash file is only a thin launcher
+  that `exec`s into `nu` when available, or falls back to the repo-owned pinned
+  bootstrap environment under `nix/flake-bootstrap/`.
 
 ## Use
 
 ```yaml
 inputs:
-  poly-local-inputs:
-    url: github:Alb-O/poly-local-inputs
+  poly-bootstrap:
+    url: github:Alb-O/poly-bootstrap
     flake: false
 imports:
-  - poly-local-inputs
+  - poly-bootstrap
 
 composer.localInputOverrides = {
   polyrepoRoot = "/path/to/polyrepo";
@@ -100,19 +101,25 @@ should set it explicitly.
 Normal repo update:
 
 ```bash
-nu poly-local-inputs.nu sync .
+nu bin/poly-bootstrap.nu sync .
+```
+
+Bootstrap a repo before `devenv` starts:
+
+```bash
+nu bin/bootstrap.nu .
 ```
 
 Structured status for automation:
 
 ```bash
-nu poly-local-inputs.nu sync --json .
+nu bin/poly-bootstrap.nu sync --json .
 ```
 
 Machine render from one manifest file:
 
 ```bash
-nu poly-local-inputs.nu render-manifest render-spec.json
+nu bin/poly-bootstrap.nu render-manifest render-spec.json
 ```
 
 Manifest shape:
@@ -135,7 +142,7 @@ Manifest shape:
 Supported Nushell module:
 
 ```nu
-use nu/mod.nu [render-local-overrides sync-local-overrides lock-status]
+use nu/mod.nu [bootstrap render-local-overrides sync-local-overrides lock-status]
 ```
 
 ## Global Defaults

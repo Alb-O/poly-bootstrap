@@ -4,9 +4,9 @@ let
   nu = pkgs.lib.getExe pkgs.nushell;
   localInputOverridesSource = builtins.path {
     path = ../..;
-    name = "poly-local-inputs-source";
+    name = "poly-bootstrap-source";
   };
-  localInputOverridesScript = "${localInputOverridesSource}/poly-local-inputs.nu";
+  localInputOverridesScript = "${localInputOverridesSource}/bin/poly-bootstrap.nu";
 in
 (
   {

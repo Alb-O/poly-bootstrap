@@ -1,5 +1,5 @@
 {
-  description = "Bootstrap Nushell environment for poly-local-inputs";
+  description = "Bootstrap Nushell environment for poly-bootstrap";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";

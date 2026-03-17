@@ -127,6 +127,10 @@ def make-lock-status [status: string input_name?: any] {
   }
 }
 
+def sync-needs-refresh [status: record] {
+  $status.changed or $status.lock_refresh_needed
+}
+
 def parse-render-manifest [manifest_path: string] {
   normalize-render-spec (
     parse-json-record $manifest_path "expected render manifest JSON to be a mapping"
@@ -201,6 +205,37 @@ export def sync-local-overrides [spec: record] {
     lock_status: $lock_status
     lock_refresh_needed: (not $lock_status.clean)
   }
+}
+
+export def bootstrap [spec: record] {
+  let spec = normalize-sync-spec $spec
+  let repo_root = ($spec.repo_root | path expand)
+  let root_status = sync-local-overrides ($spec | merge { repo_root: $repo_root })
+  let local_repo_roots = (
+    $root_status.local_repo_roots
+    | default []
+    | where {|path| (($path | describe) == 'string') and (not ($path | is-empty)) }
+    | each {|path| $path | path expand }
+    | uniq
+    | sort
+  )
+
+  for local_repo_root in $local_repo_roots {
+    if $local_repo_root == $repo_root {
+      continue
+    }
+
+    sync-local-overrides ($spec | merge { repo_root: $local_repo_root }) | ignore
+  }
+
+  if (sync-needs-refresh $root_status) {
+    do {
+      cd $repo_root
+      ^devenv update | ignore
+    }
+  }
+
+  $root_status
 }
 
 export def render-manifest-file [manifest_path: string] {

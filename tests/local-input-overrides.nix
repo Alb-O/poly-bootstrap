@@ -11,10 +11,10 @@ let
   stripContext = builtins.unsafeDiscardStringContext;
   generatorSource = builtins.path {
     path = repoRoot;
-    name = "poly-local-inputs-source";
+    name = "poly-bootstrap-source";
   };
-  generatorScript = "${generatorSource}/poly-local-inputs.nu";
-  bootstrapScript = "${generatorSource}/bootstrap-local-inputs";
+  generatorScript = "${generatorSource}/bin/poly-bootstrap.nu";
+  bootstrapScript = "${generatorSource}/bootstrap";
   localInputOverridesModule = import "${repoRoot}/devenv.nix";
 
   readYaml =
@@ -22,7 +22,7 @@ let
     builtins.fromJSON (
       stripContext (
         builtins.readFile (
-        pkgs.runCommand "poly-local-inputs-yaml-to-json"
+        pkgs.runCommand "poly-bootstrap-yaml-to-json"
           {
             nativeBuildInputs = [ pythonWithYaml ];
             pathString = path;
@@ -145,7 +145,7 @@ let
         ${beforeSync}
         cd "${generatorSource}"
         ${nu} -c '
-          use nu/mod.nu [render-local-overrides sync-local-overrides lock-status]
+          use nu/mod.nu [bootstrap render-local-overrides sync-local-overrides lock-status]
 
           let sync_status = sync-local-overrides { repo_root: $env.REPO_PATH }
           {
@@ -497,7 +497,7 @@ in
     expected = true;
   };
 
-  localInputOverrides."test supported nu module exports sync and lock helpers" = {
+  localInputOverrides."test supported nu module exports bootstrap sync and lock helpers" = {
     expr =
       let
         output = runModuleSync {
