@@ -94,7 +94,5 @@ export def build-sync-spec [
 export def render-json-status [status: any emit_json: bool] {
   if $emit_json {
     $status | to json --raw
-  } else {
-    null
   }
 }

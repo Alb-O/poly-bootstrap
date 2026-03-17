@@ -73,8 +73,6 @@ export def read-input-spec [input_spec: any] {
           url: $url
           spec: $input_spec
         }
-      } else {
-        null
       }
     }
     "string" => {

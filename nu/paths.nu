@@ -85,8 +85,6 @@ def infer-polyrepo-root [repo_root: path repo_dirs_path: path] {
   # the configured repo-dirs root, e.g. `<polyrepo>/<repoDirsPath>/<repo>`.
   if $repo_parent == $candidate_repo_dirs_root {
     $repo_dirs_parent
-  } else {
-    null
   }
 }
 
@@ -113,8 +111,6 @@ export def maybe-relativize [target_path: path root: path] {
     "."
   } else if ($path | str starts-with $root_prefix) {
     $path | str substring ($root_prefix | str length)..
-  } else {
-    null
   }
 }
 
@@ -158,7 +154,5 @@ export def path-from-url [url: string] {
     $url | str substring 5..
   } else if ($url | str starts-with "git+file:") {
     $url | str substring 9..
-  } else {
-    null
   }
 }

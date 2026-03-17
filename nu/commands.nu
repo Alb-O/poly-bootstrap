@@ -182,8 +182,6 @@ export def sync-local-overrides [spec: record] {
 
   let existing_text = if ($output_yaml_path | path exists) {
     open --raw $output_yaml_path
-  } else {
-    null
   }
   mut mode = "unchanged"
 
