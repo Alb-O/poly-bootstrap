@@ -1,56 +1,100 @@
 use support.nu [fail]
 
-export def parse-repeatable-sync-flags [args: list<string>] {
-  mut include_repos = []
-  mut exclude_repos = []
-  mut include_inputs = []
-  mut exclude_inputs = []
-  mut index = 0
+def empty-sync-filters [] {
+  {
+    include_repos: []
+    exclude_repos: []
+    include_inputs: []
+    exclude_inputs: []
+  }
+}
 
-  while $index < ($args | length) {
-    let arg = ($args | get $index)
-
-    match $arg {
-      "--include-repo" | "-i" => {
-        $index = ($index + 1)
-        if $index >= ($args | length) {
-          fail $"($arg) requires a value"
-        }
-        $include_repos = ($include_repos | append ($args | get $index))
-      }
-      "--exclude-repo" | "-x" => {
-        $index = ($index + 1)
-        if $index >= ($args | length) {
-          fail $"($arg) requires a value"
-        }
-        $exclude_repos = ($exclude_repos | append ($args | get $index))
-      }
-      "--include-input" | "-I" => {
-        $index = ($index + 1)
-        if $index >= ($args | length) {
-          fail $"($arg) requires a value"
-        }
-        $include_inputs = ($include_inputs | append ($args | get $index))
-      }
-      "--exclude-input" | "-X" => {
-        $index = ($index + 1)
-        if $index >= ($args | length) {
-          fail $"($arg) requires a value"
-        }
-        $exclude_inputs = ($exclude_inputs | append ($args | get $index))
-      }
-      _ => {
-        fail $"unknown sync flag: ($arg)"
-      }
+def append-sync-filter [filters: record flag: string value: string] {
+  match $flag {
+    "--include-repo" | "-i" => {
+      $filters | upsert include_repos ($filters.include_repos | append $value)
     }
+    "--exclude-repo" | "-x" => {
+      $filters | upsert exclude_repos ($filters.exclude_repos | append $value)
+    }
+    "--include-input" | "-I" => {
+      $filters | upsert include_inputs ($filters.include_inputs | append $value)
+    }
+    "--exclude-input" | "-X" => {
+      $filters | upsert exclude_inputs ($filters.exclude_inputs | append $value)
+    }
+    _ => {
+      fail $"unknown sync flag: ($flag)"
+    }
+  }
+}
 
-    $index = ($index + 1)
+export def parse-repeatable-sync-flags [args: list<string>] {
+  let state = (
+    $args
+    | reduce -f ({ pending_flag: null } | merge (empty-sync-filters)) {|arg, state|
+        let pending_flag = ($state | get pending_flag)
+
+        if ($pending_flag | describe) == 'string' {
+          append-sync-filter ($state | update pending_flag { null }) $pending_flag $arg
+        } else {
+          match $arg {
+            "--include-repo" | "-i" | "--exclude-repo" | "-x" | "--include-input" | "-I" | "--exclude-input" | "-X" => {
+              $state | update pending_flag { $arg }
+            }
+            _ => {
+              fail $"unknown sync flag: ($arg)"
+            }
+          }
+        }
+      }
+  )
+
+  let pending_flag = ($state | get pending_flag)
+  if ($pending_flag | describe) == 'string' {
+    fail $"($pending_flag) requires a value"
   }
 
   {
-    include_repos: ($include_repos | uniq)
-    exclude_repos: ($exclude_repos | uniq)
-    include_inputs: ($include_inputs | uniq)
-    exclude_inputs: ($exclude_inputs | uniq)
+    include_repos: (($state | get include_repos) | uniq)
+    exclude_repos: (($state | get exclude_repos) | uniq)
+    include_inputs: (($state | get include_inputs) | uniq)
+    exclude_inputs: (($state | get exclude_inputs) | uniq)
+  }
+}
+
+export def sync-help-requested [repo_root: any rest: list<string>] {
+  ("--help" in $rest) or ("-h" in $rest) or (
+    (($repo_root | describe) == 'string') and ($repo_root in [ "--help" "-h" ])
+  )
+}
+
+export def build-sync-spec [
+  repo_root: any
+  source_path: any
+  output_path: any
+  polyrepo_root: any
+  repo_dirs_path: any
+  url_scheme: any
+  rest: list<string>
+] {
+  let filters = parse-repeatable-sync-flags $rest
+
+  {
+    repo_root: ($repo_root | default ".")
+    source_path: ($source_path | default "devenv.yaml")
+    output_path: ($output_path | default "devenv.local.yaml")
+    polyrepo_root: $polyrepo_root
+    repo_dirs_path: ($repo_dirs_path | default "repos")
+    url_scheme: ($url_scheme | default "path")
+  }
+  | merge $filters
+}
+
+export def render-json-status [status: any emit_json: bool] {
+  if $emit_json {
+    $status | to json --raw
+  } else {
+    null
   }
 }

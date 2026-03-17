@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 
-use ../nu/cli.nu [parse-repeatable-sync-flags]
+use ../nu/cli.nu [build-sync-spec render-json-status sync-help-requested]
 use ../nu/commands.nu [lock-status render-manifest-file sync-local-overrides]
 
 # Generate local input overrides for sibling repos.
@@ -37,35 +37,12 @@ def --wrapped "main sync" [
   --json (-j)                     # Emit structured JSON status instead of silence.
   ...rest: string                 # Repeatable include/exclude filters.
 ] {
-  if ('--help' in $rest) or ('-h' in $rest) or ($repo_root == '--help') or ($repo_root == '-h') {
+  if (sync-help-requested $repo_root $rest) {
     return (help main sync)
   }
 
-  let parsed = parse-repeatable-sync-flags $rest
-  let repo_root = ($repo_root | default ".")
-  let source_path = ($source_path | default "devenv.yaml")
-  let output_path = ($output_path | default "devenv.local.yaml")
-  let repo_dirs_path = ($repo_dirs_path | default "repos")
-  let url_scheme = ($url_scheme | default "path")
-
-  let status = sync-local-overrides {
-    repo_root: $repo_root
-    source_path: $source_path
-    output_path: $output_path
-    polyrepo_root: $polyrepo_root
-    repo_dirs_path: $repo_dirs_path
-    url_scheme: $url_scheme
-    include_repos: $parsed.include_repos
-    exclude_repos: $parsed.exclude_repos
-    include_inputs: $parsed.include_inputs
-    exclude_inputs: $parsed.exclude_inputs
-  }
-
-  if $json {
-    $status | to json --raw
-  } else {
-    null
-  }
+  let spec = build-sync-spec $repo_root $source_path $output_path $polyrepo_root $repo_dirs_path $url_scheme $rest
+  render-json-status (sync-local-overrides $spec) $json
 }
 
 # Report whether `devenv.local.yaml` and `devenv.lock` are aligned.
@@ -79,7 +56,7 @@ def "main lock-status" [
   let status = lock-status $output_path $lock_path
 
   if $json {
-    $status | to json --raw
+    render-json-status $status true
   } else if ($status.input_name | describe) == 'string' {
     $"($status.status):($status.input_name)"
   } else {
