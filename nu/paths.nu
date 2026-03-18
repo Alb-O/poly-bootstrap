@@ -120,7 +120,7 @@ export def resolve-polyrepo-root [repo_root: path polyrepo_root: any repo_dirs_p
     return $manifest_root
   }
 
-  fail $"polyrepo root could not be inferred; pass --polyrepo-root or place a manifest-owned repo entry for this repo in (polyrepo-manifest-basename)"
+  fail $"polyrepo root could not be inferred for repo root (($repo_root | path expand --no-symlink)); searched ancestor (polyrepo-manifest-basename) files for a repos entry that resolves to this repo. Pass --polyrepo-root explicitly or add this repo to the manifest repo catalog."
 }
 
 export def maybe-relativize [target_path: path root: path]: nothing -> oneof<path, nothing> {

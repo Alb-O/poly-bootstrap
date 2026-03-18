@@ -19,6 +19,7 @@ decide what to generate.
 ## Public Interfaces
 
 - Human CLI: `bin/local-overrides.nu sync`
+- Validation CLI: `bin/local-overrides.nu check`
 - Bootstrap CLI: `bin/bootstrap-repo.nu`
 - Machine CLI: `bin/local-overrides.nu render-manifest <manifest.json>`
 - Supported Nushell module: `use nu/mod.nu [bootstrap render-local-overrides sync-local-overrides lock-status]`
@@ -142,6 +143,13 @@ Structured status for automation:
 
 ```bash
 nu bin/local-overrides.nu sync --json .
+```
+
+Validate the enclosing manifest and local repo catalog:
+
+```bash
+nu bin/local-overrides.nu check .
+nu bin/local-overrides.nu check --json --polyrepo-root /path/to/polyrepo
 ```
 
 Structured bootstrap status for one repo or all repos:

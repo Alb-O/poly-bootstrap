@@ -168,6 +168,42 @@ let
         ${nu} ${generatorScript} render-manifest "$manifestJsonPath" > "$out"
       '';
 
+  runCheckJson =
+    {
+      derivationNamePrefix,
+      fixture,
+      repoPath,
+      beforeRun ? "",
+      extraArgs ? [ ],
+    }:
+    runFixture {
+      inherit derivationNamePrefix fixture repoPath extraArgs beforeRun;
+      script = ''
+        ${nu} ${generatorScript} check "$repo_path" --json $argsString > "$out/status.json"
+      '';
+    };
+
+  runSyncFailure =
+    {
+      derivationNamePrefix,
+      fixture,
+      repoPath,
+      extraArgs ? [ ],
+    }:
+    runFixture {
+      inherit derivationNamePrefix fixture repoPath extraArgs;
+      script = ''
+        set +e
+        ${nu} ${generatorScript} sync "$repo_path" $argsString > "$out/stdout.txt" 2> "$out/stderr.txt"
+        status="$?"
+        printf '%s' "$status" > "$out/exit-code.txt"
+        if [ "$status" -eq 0 ]; then
+          echo "expected sync to fail" >&2
+          exit 1
+        fi
+      '';
+    };
+
   runModuleSync =
     {
       derivationNamePrefix,
@@ -539,6 +575,101 @@ in
     expected = true;
   };
 
+  localInputOverrides."test check json reports valid manifest catalog status" = {
+    expr =
+      let
+        output = runCheckJson {
+          derivationNamePrefix = "local-overrides-check-json-valid";
+          fixture = "recursive-polyrepo";
+          repoPath = ".";
+          extraArgs = [
+            "--polyrepo-root"
+            "."
+          ];
+        };
+        status = readJson "${output}/status.json";
+      in
+      status.ok == true
+      && status.error_count == 0
+      && status.repo_count == 5
+      && status.resolved_repo_count == 5;
+    expected = true;
+  };
+
+  localInputOverrides."test check json aggregates manifest reference errors" = {
+    expr =
+      let
+        output = runCheckJson {
+          derivationNamePrefix = "local-overrides-check-json-invalid";
+          fixture = "recursive-polyrepo";
+          repoPath = ".";
+          beforeRun = ''
+            cat > "$out/polyrepo.nuon" <<'EOF'
+            {
+              repoDirsPath: "repos"
+
+              rootProfiles: [ "missing-root-profile" ]
+              repoDefaultProfiles: [ "shared-tooling" ]
+
+              inputs: {
+                agent-scripts: {
+                  url: "github:Alb-O/agent-scripts"
+                  flake: false
+                  imports: [ "agent-scripts/tooling" ]
+                  requiresInputs: [ "missing-input" ]
+                }
+                alias: {
+                  url: "github:Alb-O/alias"
+                  flake: false
+                  localRepo: "missing-repo"
+                }
+              }
+
+              bundles: {
+                app: {
+                  extends: [ "missing-bundle" ]
+                  inputs: [ "agent-scripts" ]
+                }
+              }
+
+              profiles: {
+                shared-tooling: {
+                  imports: [ "missing-input/tooling" ]
+                }
+              }
+
+              repos: {
+                app: {
+                  path: "repos/app"
+                  bundle: "missing-bundle"
+                  profiles: [ "missing-repo-profile" ]
+                }
+              }
+            }
+            EOF
+          '';
+          extraArgs = [
+            "--polyrepo-root"
+            "."
+          ];
+        };
+        status = readJson "${output}/status.json";
+        errorPaths = builtins.map (entry: entry.path) status.errors;
+      in
+      status.ok == false
+      && status.error_count == 7
+      && errorPaths == [
+        "rootProfiles"
+        "inputs.agent-scripts.requiresInputs"
+        "inputs.alias.localRepo"
+        "bundles.app.extends"
+        "profiles.shared-tooling.imports"
+        "repos.app.bundle"
+        "repos.app.profiles"
+      ];
+    expected = true;
+  };
+
   localInputOverrides."test sync json reports unchanged status when rerun" = {
     expr =
       let
@@ -557,6 +688,26 @@ in
       && status.removed == false
       && status.lock_status.status == "missing-lock"
       && status.lock_refresh_needed == true;
+    expected = true;
+  };
+
+  localInputOverrides."test sync reports clearer repo catalog mismatch errors" = {
+    expr =
+      let
+        output = runSyncFailure {
+          derivationNamePrefix = "local-overrides-sync-clearer-current-repo-error";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/app";
+          extraArgs = [
+            "--include-repo"
+            "agent-scripts"
+          ];
+        };
+        stderr = builtins.readFile "${output}/stderr.txt";
+      in
+      lib.hasInfix "manifest-owned repo catalog after repo filters" stderr
+      && lib.hasInfix "available repo names: agent-scripts" stderr
+      && lib.hasInfix "polyrepo.nuon" stderr;
     expected = true;
   };
 
@@ -769,6 +920,6 @@ in
         };
       };
     expectedError.type = "ThrownError";
-    expectedError.msg = ".*polyrepoRoot must be set when the current repo is not nested under a polyrepo.nuon root.*";
+    expectedError.msg = ".*polyrepoRoot must be set when devenv.root is not nested under a polyrepo.nuon root with a repos entry for the current repo.*";
   };
 }

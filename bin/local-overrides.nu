@@ -1,7 +1,7 @@
 #!/usr/bin/env nu
 
 use ../nu/cli.nu [build-sync-spec render-json-status sync-help-requested]
-use ../nu/commands.nu [lock-status render-manifest-file sync-local-overrides]
+use ../nu/commands.nu [check-polyrepo-manifest lock-status render-manifest-file sync-local-overrides]
 
 # Generate manifest-owned local input overrides for sibling repos.
 #
@@ -20,6 +20,29 @@ def "main render-manifest" [
   manifest_path: path # JSON manifest describing one render invocation.
 ] {
   print --raw (render-manifest-file $manifest_path)
+}
+
+# Validate the enclosing polyrepo manifest and local repo catalog.
+#
+# This checks normalized manifest references and, when run against a checkout,
+# verifies that declared repo paths resolve under repoDirsPath and point at repo
+# roots.
+def "main check" [
+  start_path?: path               # Repo or polyrepo path to inspect. Defaults to `.`.
+  --polyrepo-root (-p): path      # Explicit polyrepo root when inference is not possible.
+  --json (-j)                     # Emit structured JSON status.
+] {
+  let status = check-polyrepo-manifest $start_path $polyrepo_root
+
+  if $json {
+    render-json-status $status true
+  } else if $status.ok {
+    $"ok: ($status.repo_count) repos validated from ($status.manifest_path)"
+  } else {
+    $status.errors
+    | each {|entry| $"($entry.path): ($entry.message)" }
+    | str join "\n"
+  }
 }
 
 # Sync local input overrides into a repo checkout.

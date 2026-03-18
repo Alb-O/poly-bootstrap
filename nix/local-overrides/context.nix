@@ -114,7 +114,7 @@ let
     else if manifestPolyrepoRoot != null then
       manifestPolyrepoRoot
     else
-      throw "composer.localInputOverrides.polyrepoRoot must be set when the current repo is not nested under a polyrepo.nuon root";
+      throw "composer.localInputOverrides.polyrepoRoot must be set when devenv.root is not nested under a polyrepo.nuon root with a repos entry for the current repo";
   repoDirsRoot =
     let
       effectiveRepoDirsPath =
@@ -181,7 +181,7 @@ let
       if currentRoot == polyrepoRoot then
         null
       else
-        throw "the current repo root must be present in the manifest-owned repo catalog after include/exclude filtering"
+        throw "the current repo root must be present in the manifest-owned repo catalog after include/exclude filtering; check repos in polyrepo.nuon and the includeRepos/excludeRepos options"
     else
       (builtins.head matches).name;
 in

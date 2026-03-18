@@ -1,6 +1,8 @@
 use overrides.nu [build-overrides render-overrides-text]
 use paths.nu [
+  get-import-input-name
   list-local-repo-paths
+  maybe-relativize
   path-from-url
   resolve-polyrepo-root
   resolve-repo-dirs-root
@@ -12,6 +14,7 @@ use sources.nu [
   expect-string-record
   parse-json-record
   parse-top-level-mapping
+  polyrepo-model-from-polyrepo-manifest
   repo-dirs-path-from-polyrepo-manifest
 ]
 use support.nu [fail fail-on-overlap polyrepo-manifest-basename]
@@ -145,6 +148,14 @@ def resolve-effective-repo-dirs-path [polyrepo_root: path repo_dirs_path: any]: 
   repo-dirs-path-from-polyrepo-manifest $"polyrepo manifest '($manifest_path)'" (open --raw $manifest_path)
 }
 
+def describe-repo-name-list [repo_names: list<string>]: nothing -> string {
+  if ($repo_names | is-empty) {
+    "none"
+  } else {
+    $repo_names | sort | str join ", "
+  }
+}
+
 def current-repo-name [local_repo_paths: record repo_root: path polyrepo_root: path]: nothing -> oneof<string, nothing, error> {
   let normalized_repo_root = ($repo_root | path expand --no-symlink | into string)
   let normalized_polyrepo_root = ($polyrepo_root | path expand --no-symlink | into string)
@@ -164,8 +175,193 @@ def current-repo-name [local_repo_paths: record repo_root: path polyrepo_root: p
   }
 
   if (($repo_name | describe) != 'string') {
-    fail $"expected repo root ($normalized_repo_root) to be present in the manifest-owned repo catalog"
+    let repo_names = ($local_repo_paths | columns)
+    fail $"expected repo root ($normalized_repo_root) to be present in the manifest-owned repo catalog after repo filters at (($normalized_polyrepo_root | path join (polyrepo-manifest-basename))); available repo names: (describe-repo-name-list $repo_names)"
   }
+}
+
+def append-validation-error [errors: list<record> path: string message: string]: nothing -> list<record> {
+  $errors | append { path: $path, message: $message }
+}
+
+def path-is-repo-root [path_value: path]: nothing -> bool {
+  (($path_value | path join ".git") | path exists) or (($path_value | path join "devenv.yaml") | path exists)
+}
+
+def validate-input-name-list [errors: list<record> path_prefix: string field_label: string input_names: list<string> known_inputs: list<string>]: nothing -> list<record> {
+  mut errors = $errors
+
+  for input_name in $input_names {
+    if not ($input_name in $known_inputs) {
+      $errors = append-validation-error $errors $"($path_prefix).($field_label)" $"references unknown input '($input_name)'"
+    }
+  }
+
+  $errors
+}
+
+def validate-import-list [errors: list<record> path_prefix: string imports_list: list<string> known_inputs: list<string>]: nothing -> list<record> {
+  mut errors = $errors
+
+  for import_name in $imports_list {
+    let input_name = (get-import-input-name $import_name)
+    if (($input_name | describe) == 'string') and (not ($input_name in $known_inputs)) {
+      $errors = append-validation-error $errors $"($path_prefix).imports" $"references import '($import_name)' whose base input '($input_name)' is not declared in inputs"
+    }
+  }
+
+  $errors
+}
+
+def validate-overlay-catalog [errors: list<record> catalog_label: string catalog: record known_inputs: list<string>]: nothing -> list<record> {
+  mut errors = $errors
+  let known_overlay_names = ($catalog | columns)
+
+  for overlay_name in $known_overlay_names {
+    let overlay_path = $"($catalog_label).($overlay_name)"
+    let overlay = ($catalog | get $overlay_name)
+
+    for parent_name in ($overlay | get extends) {
+      if not ($parent_name in $known_overlay_names) {
+        $errors = append-validation-error $errors $"($overlay_path).extends" $"references unknown ($catalog_label | str substring ..<(-1)) '($parent_name)'"
+      }
+    }
+
+    $errors = validate-input-name-list $errors $overlay_path "inputs" ($overlay | get inputs) $known_inputs
+    $errors = validate-import-list $errors $overlay_path ($overlay | get imports) $known_inputs
+  }
+
+  $errors
+}
+
+def validate-polyrepo-manifest-text [manifest_path: path polyrepo_manifest_text: string polyrepo_root: any]: nothing -> record {
+  let manifest_label = $"polyrepo manifest '($manifest_path)'"
+  let model = polyrepo-model-from-polyrepo-manifest $manifest_label $polyrepo_manifest_text
+  let known_inputs = ($model.inputs | columns)
+  let known_profiles = ($model.profiles | columns)
+  let known_bundles = ($model.bundles | columns)
+  let known_repo_names = ($model.repos | columns)
+  mut errors = []
+
+  for profile_name in $model.rootProfiles {
+    if not ($profile_name in $known_profiles) {
+      $errors = append-validation-error $errors "rootProfiles" $"references unknown profile '($profile_name)'"
+    }
+  }
+
+  for profile_name in $model.repoDefaultProfiles {
+    if not ($profile_name in $known_profiles) {
+      $errors = append-validation-error $errors "repoDefaultProfiles" $"references unknown profile '($profile_name)'"
+    }
+  }
+
+  for input_name in $known_inputs {
+    let input_path = $"inputs.($input_name)"
+    let input_entry = ($model.inputs | get $input_name)
+    $errors = validate-import-list $errors $input_path ($input_entry | get imports) $known_inputs
+    $errors = validate-input-name-list $errors $input_path "requiresInputs" ($input_entry | get requiresInputs) $known_inputs
+
+    let local_repo_name = ($input_entry | get localRepo)
+    if (($local_repo_name | describe) == 'string') and (not ($local_repo_name in $known_repo_names)) {
+      $errors = append-validation-error $errors $"($input_path).localRepo" $"references unknown repo '($local_repo_name)'"
+    }
+  }
+
+  $errors = validate-overlay-catalog $errors "bundles" $model.bundles $known_inputs
+  $errors = validate-overlay-catalog $errors "profiles" $model.profiles $known_inputs
+
+  for repo_name in $known_repo_names {
+    let repo_path = $"repos.($repo_name)"
+    let repo_entry = ($model.repos | get $repo_name)
+    let bundle_name = ($repo_entry | get bundle)
+
+    if (($bundle_name | describe) == 'string') and (not ($bundle_name in $known_bundles)) {
+      $errors = append-validation-error $errors $"($repo_path).bundle" $"references unknown bundle '($bundle_name)'"
+    }
+
+    for profile_name in ($repo_entry | get profiles) {
+      if not ($profile_name in $known_profiles) {
+        $errors = append-validation-error $errors $"($repo_path).profiles" $"references unknown profile '($profile_name)'"
+      }
+    }
+
+    $errors = validate-input-name-list $errors $repo_path "inputs" ($repo_entry | get inputs) $known_inputs
+    $errors = validate-import-list $errors $repo_path ($repo_entry | get imports) $known_inputs
+  }
+
+  let resolved_repo_count = if (($polyrepo_root | describe) == 'string') {
+    let repo_dirs_root = resolve-repo-dirs-root $polyrepo_root $model.repoDirsPath
+    let resolved_repo_records = (
+      $model.repos
+      | items {|repo_name, repo_entry|
+          let resolved_path = resolve-repo-path $polyrepo_root ($repo_entry | get path)
+          let relative_path = maybe-relativize $resolved_path $repo_dirs_root
+          {
+            repo: {
+              name: $repo_name
+              path: $resolved_path
+            }
+            errors: (
+              if (($relative_path | describe) == 'nothing') {
+                [ { path: $"repos.($repo_name).path", message: $"resolves to ($resolved_path), which is outside repoDirsPath rooted at ($repo_dirs_root)" } ]
+              } else if not (path-is-repo-root $resolved_path) {
+                [ { path: $"repos.($repo_name).path", message: $"resolves to ($resolved_path), which is not a repo root with .git or devenv.yaml" } ]
+              } else {
+                []
+              }
+            )
+          }
+        }
+    )
+    let resolved_repo_roots = ($resolved_repo_records | each {|entry| $entry.repo })
+    $errors = ($errors | append ($resolved_repo_records | each {|entry| $entry.errors } | flatten) | flatten)
+    let duplicate_paths = (
+      $resolved_repo_roots
+      | group-by path
+      | transpose path entries
+      | where {|group| (($group.entries | length) > 1) }
+    )
+
+    for duplicate_group in $duplicate_paths {
+      let duplicate_names = (
+        $duplicate_group.entries
+        | each {|entry| $entry.name }
+        | sort
+        | str join ", "
+      )
+      $errors = append-validation-error $errors "repos" $"multiple repos resolve to the same path ($duplicate_group.path): ($duplicate_names)"
+    }
+
+    $resolved_repo_roots | length
+  } else {
+    $known_repo_names | length
+  }
+
+  {
+    ok: ($errors | is-empty)
+    manifest_path: $manifest_path
+    polyrepo_root: ($polyrepo_root | default null)
+    repo_count: ($known_repo_names | length)
+    resolved_repo_count: $resolved_repo_count
+    error_count: ($errors | length)
+    errors: $errors
+  }
+}
+
+export def check-polyrepo-manifest [start_path?: path polyrepo_root?: path]: nothing -> record {
+  let start_path = (resolve-repo-path (pwd) ($start_path | default "."))
+  let repo_root = (
+    find-repo-root $start_path
+    | default $start_path
+  )
+  let resolved_polyrepo_root = resolve-polyrepo-root $repo_root $polyrepo_root null
+  let manifest_path = ($resolved_polyrepo_root | path join (polyrepo-manifest-basename))
+
+  if not ($manifest_path | path exists) {
+    fail $"expected (polyrepo-manifest-basename) at ($resolved_polyrepo_root)"
+  }
+
+  validate-polyrepo-manifest-text $manifest_path (open --raw $manifest_path) $resolved_polyrepo_root
 }
 
 def make-lock-status [status: string input_name?: any]: nothing -> record {
