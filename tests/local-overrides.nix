@@ -309,6 +309,7 @@ in
       && rendered.imports == [
         "docs-shared/subdir"
         "agent-scripts/tooling"
+        "nusurf/nushell-plugin"
       ];
     expected = true;
   };
@@ -364,10 +365,12 @@ in
               global_inputs_yaml_text = builtins.readFile "${fixture}/.devenv-global-inputs.yaml";
               local_repo_names = [
                 "agent-scripts"
+                "nusurf"
                 "poly-docs-env"
               ];
               repo_sources = {
                 agent-scripts = builtins.readFile "${fixture}/repos/agent-scripts/devenv.yaml";
+                nusurf = builtins.readFile "${fixture}/repos/nusurf/devenv.yaml";
                 poly-docs-env = builtins.readFile "${fixture}/repos/poly-docs-env/devenv.yaml";
               };
               include_inputs = [ ];
@@ -385,6 +388,7 @@ in
       && rendered.imports == [
         "docs-shared/subdir"
         "agent-scripts/tooling"
+        "nusurf/nushell-plugin"
       ];
     expected = true;
   };
@@ -438,9 +442,10 @@ in
         };
         status = readJson "${output}/status.json";
       in
-      status.local_repo_count == 2
+      status.local_repo_count == 3
       && status.local_repo_names == [
         "agent-scripts"
+        "nusurf"
         "poly-docs-env"
       ];
     expected = true;
@@ -485,6 +490,7 @@ in
       && rendered.imports == [
         "docs-shared/subdir"
         "agent-scripts/tooling"
+        "nusurf/nushell-plugin"
       ];
     expected = true;
   };

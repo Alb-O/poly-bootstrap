@@ -8,7 +8,14 @@ inputs:
   agent-scripts:
     url: github:Alb-O/agent-scripts
     flake: false
+  nusurf:
+    url: github:Alb-O/nusurf
+    flake: false
+  poly-rust-env:
+    url: github:Alb-O/poly-rust-env
+    flake: false
 imports:
   - docs-shared/subdir
   - remote-global
   - agent-scripts/tooling
+  - nusurf/nushell-plugin

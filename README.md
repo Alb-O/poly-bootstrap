@@ -162,11 +162,15 @@ inputs:
   agent-scripts:
     url: github:Alb-O/agent-scripts
     flake: false
+  nusurf:
+    url: github:Alb-O/nusurf
+    flake: false
   poly-docs-env:
     url: github:Alb-O/poly-docs-env
     flake: false
 imports:
   - agent-scripts
+  - nusurf/nushell-plugin
 ```
 
 Rules:
