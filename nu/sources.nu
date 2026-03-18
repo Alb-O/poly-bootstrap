@@ -244,3 +244,14 @@ export def render-shared-inputs-yaml [manifest_label: string manifest_text: stri
 
   $rendered | to yaml
 }
+
+export def repo-dirs-path-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<path, error> {
+  let manifest = parse-top-level-nuon-mapping $manifest_label $manifest_text
+  let repo_dirs_path = ($manifest | get -o repoDirsPath)
+
+  if (($repo_dirs_path | describe) != 'string') or ($repo_dirs_path | is-empty) {
+    fail $"expected repoDirsPath in ($manifest_label) to be a non-empty string"
+  }
+
+  $repo_dirs_path
+}

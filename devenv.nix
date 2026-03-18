@@ -15,13 +15,13 @@ in
     polyrepoRoot = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "Polyrepo root used for generated overrides. When null, infer it from the current repo location and `repoDirsPath`.";
+      description = "Polyrepo root used for generated overrides. When null, infer it from the nearest enclosing `polyrepo.nuon` root, falling back to repo layout heuristics.";
     };
 
     repoDirsPath = lib.mkOption {
-      type = lib.types.str;
-      default = "repos";
-      description = "Directory path containing consumer repos, relative to `polyrepoRoot` unless absolute.";
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Directory path containing consumer repos. When null, read `repoDirsPath` from `polyrepo.nuon` at the effective polyrepo root.";
     };
 
     sourcePath = lib.mkOption {

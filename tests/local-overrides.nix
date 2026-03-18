@@ -216,7 +216,7 @@ let
         export BOOTSTRAP_LOG="$out/bootstrap.log"
         export DEVENV_FILES_LOG="$out/devenv-files.log"
         export SHELL_EXPORT_LOG="$out/shell-export.log"
-        ${pkgs.bash}/bin/bash "${bootstrapScript}" "$repo_path" --polyrepo-root "$out" --repo-dirs-path repos
+        ${pkgs.bash}/bin/bash "${bootstrapScript}" "$repo_path" --polyrepo-root "$out"
       '';
     };
 
@@ -237,7 +237,7 @@ let
         export BOOTSTRAP_LOG="$out/bootstrap.log"
         export DEVENV_FILES_LOG="$out/devenv-files.log"
         export SHELL_EXPORT_LOG="$out/shell-export.log"
-        ${pkgs.bash}/bin/bash "${bootstrapScript}" --json "$repo_path" --polyrepo-root "$out" --repo-dirs-path repos $argsString > "$out/status.json"
+        ${pkgs.bash}/bin/bash "${bootstrapScript}" --json "$repo_path" --polyrepo-root "$out" $argsString > "$out/status.json"
       '';
     };
 
@@ -708,7 +708,7 @@ in
           devenv.root = fixturePath "standalone-repo";
           composer.localInputOverrides = {
             polyrepoRoot = null;
-            repoDirsPath = "repos";
+            repoDirsPath = null;
             sourcePath = "devenv.yaml";
             outputPath = "devenv.local.yaml";
             urlScheme = "path";
@@ -720,6 +720,6 @@ in
         };
       };
     expectedError.type = "ThrownError";
-    expectedError.msg = ".*polyrepoRoot must be set when the current repo is not nested under.*";
+    expectedError.msg = ".*polyrepoRoot must be set when the current repo is not nested under a polyrepo.nuon root.*";
   };
 }

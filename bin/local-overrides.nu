@@ -32,7 +32,7 @@ def --wrapped "main sync" [
   --source-path (-s): path        # Source YAML path inside the consumer repo.
   --output-path (-o): path        # Generated override YAML path inside the consumer repo.
   --polyrepo-root (-p): path      # Explicit polyrepo root when inference is not possible.
-  --repo-dirs-path (-r): path     # Path to the sibling repo directory.
+  --repo-dirs-path (-r): path     # Path to the sibling repo directory. Defaults to repoDirsPath from polyrepo.nuon.
   --url-scheme (-u): string       # Override URL scheme: path or git+file.
   --json (-j)                     # Emit structured JSON status instead of silence.
   ...rest: string                 # Repeatable include/exclude filters.

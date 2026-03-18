@@ -1,4 +1,5 @@
-use support.nu [fail]
+use sources.nu [repo-dirs-path-from-polyrepo-manifest]
+use support.nu [fail polyrepo-manifest-basename]
 
 export def get-import-input-name [import_name: string]: nothing -> oneof<string, nothing> {
   if ([ "path:" "/" "./" "../" ] | any {|prefix| $import_name | str starts-with $prefix }) {
@@ -62,8 +63,25 @@ def dirname-n [levels: int path_value: path]: nothing -> path {
   $current
 }
 
+def repo-matches-polyrepo-root [repo_root: path polyrepo_root: path repo_dirs_path: path]: nothing -> bool {
+  if ($repo_dirs_path | str starts-with "/") {
+    return false
+  }
+
+  let repo_root = ($repo_root | path expand --no-symlink)
+  let repo_parent = ($repo_root | path dirname)
+  let repo_grandparent = ($repo_parent | path dirname)
+  let candidate_repo_dirs_root = (($polyrepo_root | path join $repo_dirs_path) | path expand --no-symlink)
+
+  ($repo_parent == $candidate_repo_dirs_root) or ($repo_grandparent == $candidate_repo_dirs_root)
+}
+
 export def resolve-repo-dirs-root [polyrepo_root: path repo_dirs_path: path]: nothing -> path {
   resolve-repo-path $polyrepo_root $repo_dirs_path
+}
+
+def polyrepo-manifest-path [polyrepo_root: path]: nothing -> path {
+  ($polyrepo_root | path join (polyrepo-manifest-basename))
 }
 
 def is-repo-root [path_value: path]: nothing -> bool {
@@ -90,7 +108,34 @@ export def find-repo-root [start_path: path]: nothing -> oneof<path, nothing> {
   }
 }
 
-def infer-polyrepo-root [repo_root: path repo_dirs_path: path]: nothing -> oneof<path, nothing> {
+export def find-polyrepo-root [repo_root: path]: nothing -> oneof<path, nothing> {
+  mut current = ($repo_root | path expand --no-symlink)
+
+  while true {
+    let manifest_path = (polyrepo-manifest-path $current)
+
+    if ($manifest_path | path exists) {
+      let repo_dirs_path = repo-dirs-path-from-polyrepo-manifest $"polyrepo manifest '($manifest_path)'" (open --raw $manifest_path)
+
+      if (repo-matches-polyrepo-root $repo_root $current $repo_dirs_path) {
+        return $current
+      }
+    }
+
+    let parent = ($current | path dirname)
+    if $parent == $current {
+      return null
+    }
+
+    $current = $parent
+  }
+}
+
+def infer-polyrepo-root [repo_root: path repo_dirs_path: any]: nothing -> oneof<path, nothing> {
+  if (($repo_dirs_path | describe) != 'string') {
+    return null
+  }
+
   if ($repo_dirs_path | str starts-with "/") {
     return null
   }
@@ -124,15 +169,21 @@ def infer-polyrepo-root [repo_root: path repo_dirs_path: path]: nothing -> oneof
   }
 }
 
-export def resolve-polyrepo-root [repo_root: path polyrepo_root: any repo_dirs_path: path]: nothing -> oneof<path, error> {
+export def resolve-polyrepo-root [repo_root: path polyrepo_root: any repo_dirs_path: any]: nothing -> oneof<path, error> {
   if ($polyrepo_root | describe) == 'string' {
     return (resolve-repo-path $repo_root $polyrepo_root)
+  }
+
+  let manifest_root = find-polyrepo-root $repo_root
+
+  if (($manifest_root | describe) == 'string') {
+    return $manifest_root
   }
 
   let inferred = infer-polyrepo-root $repo_root $repo_dirs_path
 
   if ($inferred | describe) == 'nothing' {
-    fail "polyrepo root could not be inferred; pass --polyrepo-root when the current repo is not nested under --repo-dirs-path"
+    fail $"polyrepo root could not be inferred; pass --polyrepo-root or place (polyrepo-manifest-basename) at the polyrepo root"
   }
 
   $inferred

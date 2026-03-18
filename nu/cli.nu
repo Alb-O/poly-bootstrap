@@ -85,7 +85,7 @@ export def build-sync-spec [
     source_path: ($source_path | default "devenv.yaml")
     output_path: ($output_path | default "devenv.local.yaml")
     polyrepo_root: $polyrepo_root
-    repo_dirs_path: ($repo_dirs_path | default "repos")
+    repo_dirs_path: $repo_dirs_path
     url_scheme: ($url_scheme | default "path")
   }
   | merge $filters

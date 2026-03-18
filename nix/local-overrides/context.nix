@@ -5,6 +5,50 @@ let
   currentRoot = toString config.devenv.root;
   includeRepos = lib.unique cfg.includeRepos;
   excludeRepos = lib.unique cfg.excludeRepos;
+  readManifestRepoDirsPath =
+    manifestPath:
+    let
+      manifestText = builtins.readFile manifestPath;
+      lines = lib.splitString "\n" manifestText;
+      matches = lib.filter (match: match != null) (
+        map (line: builtins.match "^[[:space:]]*repoDirsPath[[:space:]]*:[[:space:]]*\"([^\"]+)\"[[:space:]]*$" line) lines
+      );
+    in
+    if matches == [ ] then
+      throw "polyrepo.nuon must define repoDirsPath as a single-line string field"
+    else
+      builtins.elemAt (builtins.head matches) 0;
+  findPolyrepoRoot =
+    repoRoot:
+    let
+      go =
+        candidate:
+        let
+          manifestPath = "${candidate}/polyrepo.nuon";
+          parent = dirOf candidate;
+          repoDirsPath = if builtins.pathExists manifestPath then readManifestRepoDirsPath manifestPath else null;
+          candidateRepoDirsRoot =
+            if repoDirsPath == null || lib.hasPrefix "/" repoDirsPath then
+              null
+            else
+              "${candidate}/${repoDirsPath}";
+          repoParent = dirOf repoRoot;
+          repoGrandparent = dirOf repoParent;
+          matchesCandidate =
+            candidateRepoDirsRoot != null
+            && (
+              repoParent == candidateRepoDirsRoot
+              || repoGrandparent == candidateRepoDirsRoot
+            );
+        in
+        if builtins.pathExists manifestPath && matchesCandidate then
+          candidate
+        else if parent == candidate then
+          null
+        else
+          go parent;
+    in
+    go repoRoot;
   normalizeSegments =
     path: lib.filter (segment: segment != "" && segment != ".") (lib.splitString "/" path);
   dirnameN =
@@ -13,53 +57,41 @@ let
       path
     else
       dirnameN (levels - 1) (dirOf path);
-  repoDirsSegments =
-    if lib.hasPrefix "/" cfg.repoDirsPath
-    then [ ]
-    else normalizeSegments cfg.repoDirsPath;
   isRepoRoot =
     path:
     builtins.pathExists "${path}/.git"
     || builtins.pathExists "${path}/devenv.yaml";
-  inferredPolyrepoRoot =
-    if lib.hasPrefix "/" cfg.repoDirsPath then
-      null
-    else
-      let
-        repoParent = dirOf currentRoot;
-        repoGrandparent = dirOf repoParent;
-        directPolyrepoRoot = dirnameN ((lib.length repoDirsSegments) + 1) currentRoot;
-        groupedPolyrepoRoot = dirnameN ((lib.length repoDirsSegments) + 2) currentRoot;
-        directCandidateRepoDirsRoot =
-          if repoDirsSegments == [ ] then
-            directPolyrepoRoot
-          else
-            "${directPolyrepoRoot}/${cfg.repoDirsPath}";
-        groupedCandidateRepoDirsRoot =
-          if repoDirsSegments == [ ] then
-            groupedPolyrepoRoot
-          else
-            "${groupedPolyrepoRoot}/${cfg.repoDirsPath}";
-      in
-      if repoParent == directCandidateRepoDirsRoot then
-        directPolyrepoRoot
-      else if repoGrandparent == groupedCandidateRepoDirsRoot then
-        groupedPolyrepoRoot
-      else
-        null;
+  manifestPolyrepoRoot =
+    if cfg.polyrepoRoot == null then findPolyrepoRoot currentRoot else null;
   polyrepoRoot =
     if cfg.polyrepoRoot != null then
       if lib.hasPrefix "/" cfg.polyrepoRoot then cfg.polyrepoRoot else "${currentRoot}/${cfg.polyrepoRoot}"
-    else if inferredPolyrepoRoot != null then
-      inferredPolyrepoRoot
+    else if manifestPolyrepoRoot != null then
+      manifestPolyrepoRoot
     else
-      throw "composer.localInputOverrides.polyrepoRoot must be set when the current repo is not nested under composer.localInputOverrides.repoDirsPath";
+      throw "composer.localInputOverrides.polyrepoRoot must be set when the current repo is not nested under a polyrepo.nuon root";
   repoDirsRoot =
-    if lib.hasPrefix "/" cfg.repoDirsPath
-    then cfg.repoDirsPath
+    let
+      effectiveRepoDirsPath =
+        if cfg.repoDirsPath != null then
+          cfg.repoDirsPath
+        else
+          readManifestRepoDirsPath "${polyrepoRoot}/polyrepo.nuon";
+    in
+    if lib.hasPrefix "/" effectiveRepoDirsPath
+    then effectiveRepoDirsPath
     else if repoDirsSegments == [ ]
     then polyrepoRoot
-    else "${polyrepoRoot}/${cfg.repoDirsPath}";
+    else "${polyrepoRoot}/${effectiveRepoDirsPath}";
+  repoDirsPath =
+    if cfg.repoDirsPath != null then
+      cfg.repoDirsPath
+    else
+      readManifestRepoDirsPath "${polyrepoRoot}/polyrepo.nuon";
+  repoDirsSegments =
+    if lib.hasPrefix "/" repoDirsPath
+    then [ ]
+    else normalizeSegments repoDirsPath;
   polyrepoManifestPath = "${polyrepoRoot}/polyrepo.nuon";
   sourcePath =
     if lib.hasPrefix "/" cfg.sourcePath
@@ -112,7 +144,7 @@ let
     if duplicateRepoNames == [ ] then
       null
     else
-      throw "multiple local repos share the same basename under composer.localInputOverrides.repoDirsPath: ${lib.concatStringsSep ", " duplicateRepoNames}";
+      throw "multiple local repos share the same basename under the effective repoDirsPath: ${lib.concatStringsSep ", " duplicateRepoNames}";
   repoPathPairs =
     let
       _ = _checkDuplicateRepoNames;
@@ -151,7 +183,7 @@ let
   );
 in
 {
-  inherit polyrepoManifestPath polyrepoRoot repoDirsRoot repoNames repoPaths repoSources sourcePath;
+  inherit polyrepoManifestPath polyrepoRoot repoDirsPath repoDirsRoot repoNames repoPaths repoSources sourcePath;
   polyrepoManifestText =
     if builtins.pathExists polyrepoManifestPath
     then builtins.readFile polyrepoManifestPath

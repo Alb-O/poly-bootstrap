@@ -32,7 +32,7 @@ devenv shell --no-tui -- bash -lc 'run-nix-tests'
 ## Options
 
 - `polyrepoRoot`: actual polyrepo root
-- `repoDirsPath`: directory path containing consumer repos
+- `repoDirsPath`: optional override for the consumer repo directory path. When omitted, read it from `polyrepo.nuon`.
 - `sourcePath`: source YAML to scan for inputs
 - `outputPath`: generated override file path
 - `urlScheme`: generated override URL scheme
@@ -99,7 +99,6 @@ imports:
 
 composer.localInputOverrides = {
   polyrepoRoot = "/path/to/polyrepo";
-  repoDirsPath = "repos";
   excludeRepos = [ "big-experimental-repo" ];
   includeInputs = [ "agent-scripts" "poly-docs-env" ];
 };
@@ -188,6 +187,8 @@ whole polyrepo:
 
 ```nuon
 {
+  repoDirsPath: "repos"
+
   sharedInputs: {
     agent-scripts: {
       url: "github:Alb-O/agent-scripts"

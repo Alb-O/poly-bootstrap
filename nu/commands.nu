@@ -15,6 +15,7 @@ use sources.nu [
   expect-string-record
   parse-json-record
   parse-top-level-mapping
+  repo-dirs-path-from-polyrepo-manifest
   render-shared-inputs-yaml
 ]
 use support.nu [fail fail-on-overlap polyrepo-manifest-basename]
@@ -100,7 +101,7 @@ def normalize-sync-spec [spec: record]: nothing -> record {
       source_path: "devenv.yaml"
       output_path: "devenv.local.yaml"
       polyrepo_root: null
-      repo_dirs_path: "repos"
+      repo_dirs_path: null
       url_scheme: "path"
       include_repos: []
       exclude_repos: []
@@ -113,7 +114,6 @@ def normalize-sync-spec [spec: record]: nothing -> record {
   let repo_root = require-path ($spec | get -o repo_root) "repo_root"
   let source_path = require-path ($spec | get -o source_path) "source_path"
   let output_path = require-path ($spec | get -o output_path) "output_path"
-  let repo_dirs_path = require-path ($spec | get -o repo_dirs_path) "repo_dirs_path"
   let url_scheme = require-string ($spec | get -o url_scheme) "url_scheme"
   let include_repos = expect-string-list ($spec | get -o include_repos | default []) "include_repos"
   let exclude_repos = expect-string-list ($spec | get -o exclude_repos | default []) "exclude_repos"
@@ -129,13 +129,27 @@ def normalize-sync-spec [spec: record]: nothing -> record {
     source_path: $source_path
     output_path: $output_path
     polyrepo_root: ($spec | get -o polyrepo_root)
-    repo_dirs_path: $repo_dirs_path
+    repo_dirs_path: ($spec | get -o repo_dirs_path)
     url_scheme: $url_scheme
     include_repos: $include_repos
     exclude_repos: $exclude_repos
     include_inputs: $include_inputs
     exclude_inputs: $exclude_inputs
   }
+}
+
+def resolve-effective-repo-dirs-path [polyrepo_root: path repo_dirs_path: any]: nothing -> oneof<path, error> {
+  if (($repo_dirs_path | describe) == 'string') {
+    return $repo_dirs_path
+  }
+
+  let manifest_path = ($polyrepo_root | path join (polyrepo-manifest-basename))
+
+  if not ($manifest_path | path exists) {
+    fail $"expected (polyrepo-manifest-basename) at ($polyrepo_root) to provide repoDirsPath"
+  }
+
+  repo-dirs-path-from-polyrepo-manifest $"polyrepo manifest '($manifest_path)'" (open --raw $manifest_path)
 }
 
 def make-lock-status [status: string input_name?: any]: nothing -> record {
@@ -376,7 +390,8 @@ def bootstrap-target-repo-roots [spec: record]: nothing -> list<path> {
   let spec = normalize-sync-spec $spec
   let repo_root = ($spec.repo_root | path expand --no-symlink)
   let polyrepo_root = resolve-polyrepo-root $repo_root $spec.polyrepo_root $spec.repo_dirs_path
-  let repo_dirs_root = resolve-repo-dirs-root $polyrepo_root $spec.repo_dirs_path
+  let repo_dirs_path = resolve-effective-repo-dirs-path $polyrepo_root $spec.repo_dirs_path
+  let repo_dirs_root = resolve-repo-dirs-root $polyrepo_root $repo_dirs_path
 
   list-local-repo-paths $repo_dirs_root [] []
   | values
@@ -395,7 +410,8 @@ export def sync-local-overrides [spec: record]: nothing -> record {
   let output_yaml_path = resolve-repo-path $repo_root $spec.output_path
   let lock_path = (resolve-repo-path $repo_root "devenv.lock")
   let polyrepo_root = resolve-polyrepo-root $repo_root $spec.polyrepo_root $spec.repo_dirs_path
-  let repo_dirs_root = resolve-repo-dirs-root $polyrepo_root $spec.repo_dirs_path
+  let repo_dirs_path = resolve-effective-repo-dirs-path $polyrepo_root $spec.repo_dirs_path
+  let repo_dirs_root = resolve-repo-dirs-root $polyrepo_root $repo_dirs_path
 
   let source_yaml_text = open --raw $source_yaml_path
   let polyrepo_manifest_path = ($polyrepo_root | path join (polyrepo-manifest-basename))

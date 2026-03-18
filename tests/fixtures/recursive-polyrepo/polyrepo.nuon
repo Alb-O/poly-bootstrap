@@ -1,4 +1,6 @@
 {
+  repoDirsPath: "repos"
+
   sharedInputs: {
     docs-shared: {
       url: "github:Alb-O/poly-docs-env"
