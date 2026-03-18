@@ -1,28 +1,19 @@
 {
   repoDirsPath: "repos"
 
-  repos: [
-    "repos/agent-scripts"
-    "repos/app"
-    "repos/nusurf"
-    "repos/poly-docs-env"
-  ]
+  defaultProfiles: [ "shared-tooling" ]
 
-  sharedInputs: {
-    docs-shared: {
-      url: "github:Alb-O/poly-docs-env"
-      flake: false
-      imports: [ "docs-shared/subdir" ]
-    }
-    remote-global: {
-      url: "github:Alb-O/remote-global"
-      flake: false
-      imports: [ "remote-global" ]
-    }
+  inputs: {
     agent-scripts: {
       url: "github:Alb-O/agent-scripts"
       flake: false
       imports: [ "agent-scripts/tooling" ]
+    }
+    docs-shared: {
+      url: "github:Alb-O/poly-docs-env"
+      flake: false
+      localRepo: "poly-docs-env"
+      imports: [ "docs-shared/subdir" ]
     }
     nusurf: {
       url: "github:Alb-O/nusurf"
@@ -34,4 +25,39 @@
       flake: false
     }
   }
+
+  bundles: {
+    empty: {}
+    agent-scripts-bundle: {
+      inputs: [ "docs-shared" ]
+    }
+    nusurf-bundle: {
+      inputs: [ "poly-rust-env" ]
+    }
+  }
+
+  profiles: {
+    shared-tooling: {
+      inputs: [ "agent-scripts" "nusurf" ]
+    }
+  }
+
+  repos: [
+    {
+      path: "repos/agent-scripts"
+      bundle: "agent-scripts-bundle"
+    }
+    {
+      path: "repos/app"
+      bundle: "empty"
+    }
+    {
+      path: "repos/nusurf"
+      bundle: "nusurf-bundle"
+    }
+    {
+      path: "repos/poly-docs-env"
+      bundle: "empty"
+    }
+  ]
 }

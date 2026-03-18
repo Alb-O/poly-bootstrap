@@ -5,7 +5,6 @@ use ../nu/commands.nu [bootstrap bootstrap-all]
 
 def main [
   repo_root?: path              # Consumer repo root. Defaults to `.`.
-  --source-path (-s): path      # Source YAML path inside the consumer repo.
   --output-path (-o): path      # Generated override YAML path inside the consumer repo.
   --polyrepo-root (-p): path    # Explicit polyrepo root when inference is not possible.
   --repo-dirs-path (-r): path   # Path to the sibling repo directory. Defaults to repoDirsPath from polyrepo.nuon.
@@ -18,7 +17,7 @@ def main [
     return (help main)
   }
 
-  let spec = build-sync-spec $repo_root $source_path $output_path $polyrepo_root $repo_dirs_path $url_scheme $rest
+  let spec = build-sync-spec $repo_root $output_path $polyrepo_root $repo_dirs_path $url_scheme $rest
   let status = if $all_repos {
     try {
       bootstrap-all $spec

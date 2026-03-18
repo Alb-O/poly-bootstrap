@@ -1,9 +1,26 @@
 {
   repoDirsPath: "repos"
 
+  inputs: {}
+
+  bundles: {
+    empty: {}
+  }
+
+  profiles: {}
+
   repos: [
-    "repos/app"
-    "repos/dep"
-    "repos/transitive"
+    {
+      path: "repos/app"
+      bundle: "empty"
+    }
+    {
+      path: "repos/dep"
+      bundle: "empty"
+    }
+    {
+      path: "repos/transitive"
+      bundle: "empty"
+    }
   ]
 }

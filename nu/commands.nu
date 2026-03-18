@@ -1,8 +1,6 @@
 use overrides.nu [build-overrides render-overrides-text]
 use paths.nu [
   list-local-repo-paths
-  load-repo-sources
-  maybe-relativize
   path-from-url
   resolve-polyrepo-root
   resolve-repo-dirs-root
@@ -15,7 +13,6 @@ use sources.nu [
   parse-json-record
   parse-top-level-mapping
   repo-dirs-path-from-polyrepo-manifest
-  render-shared-inputs-yaml
 ]
 use support.nu [fail fail-on-overlap polyrepo-manifest-basename]
 
@@ -42,13 +39,17 @@ def validate-url-scheme [url_scheme: string]: nothing -> oneof<nothing, error> {
 }
 
 def render-normalized-overrides [spec: record]: nothing -> string {
-  let shared_inputs_yaml_text = if ($spec.polyrepo_manifest_text | str trim) != "" {
-    render-shared-inputs-yaml $"polyrepo manifest '((polyrepo-manifest-basename))'" $spec.polyrepo_manifest_text
-  } else {
-    ""
-  }
-  let rendered = build-overrides $spec.source_yaml_text $shared_inputs_yaml_text $spec.local_repo_names $spec.local_repo_paths $spec.repo_sources $spec.include_inputs $spec.exclude_inputs $spec.repo_dirs_root $spec.url_scheme
+  let rendered = build-overrides $spec.polyrepo_manifest_text $spec.current_repo_name $spec.local_repo_paths $spec.include_inputs $spec.exclude_inputs $spec.url_scheme
   render-overrides-text $rendered.overrides $rendered.imports
+}
+
+def compute-rendered-overrides [spec: record]: nothing -> record {
+  let rendered = build-overrides $spec.polyrepo_manifest_text $spec.current_repo_name $spec.local_repo_paths $spec.include_inputs $spec.exclude_inputs $spec.url_scheme
+
+  {
+    text: (render-overrides-text $rendered.overrides $rendered.imports)
+    local_repo_names: $rendered.local_repo_names
+  }
 }
 
 def normalize-render-spec [spec: record]: nothing -> record {
@@ -56,38 +57,34 @@ def normalize-render-spec [spec: record]: nothing -> record {
   # fields once here and keep the renderer itself on a fully normalized shape.
   let spec = (
     {
-      polyrepo_manifest_text: ""
-      local_repo_names: []
       local_repo_paths: {}
-      repo_sources: {}
       include_inputs: []
       exclude_inputs: []
     }
     | merge $spec
   )
 
-  let source_yaml_text = require-string ($spec | get -o source_yaml_text) "source_yaml_text"
-  let polyrepo_manifest_text = require-string ($spec | get -o polyrepo_manifest_text | default "") "polyrepo_manifest_text"
-  let local_repo_names = expect-string-list ($spec | get -o local_repo_names | default []) "local_repo_names"
+  let current_repo_name = ($spec | get -o current_repo_name)
+  let current_repo_name = if (($current_repo_name | describe) == 'nothing') {
+    null
+  } else {
+    require-string $current_repo_name "current_repo_name"
+  }
+  let polyrepo_manifest_text = require-string ($spec | get -o polyrepo_manifest_text) "polyrepo_manifest_text"
   let local_repo_paths = expect-string-record ($spec | get -o local_repo_paths | default {}) "local_repo_paths"
-  let repo_sources = expect-string-record ($spec | get -o repo_sources | default {}) "repo_sources"
   let include_inputs = expect-string-list ($spec | get -o include_inputs | default []) "include_inputs"
   let exclude_inputs = expect-string-list ($spec | get -o exclude_inputs | default []) "exclude_inputs"
-  let repo_dirs_root = require-path ($spec | get -o repo_dirs_root) "repo_dirs_root"
   let url_scheme = require-string ($spec | get -o url_scheme) "url_scheme"
 
   validate-url-scheme $url_scheme
   fail-on-overlap $include_inputs $exclude_inputs "included inputs" "excluded inputs"
 
   {
-    source_yaml_text: $source_yaml_text
+    current_repo_name: $current_repo_name
     polyrepo_manifest_text: $polyrepo_manifest_text
-    local_repo_names: $local_repo_names
     local_repo_paths: $local_repo_paths
-    repo_sources: $repo_sources
     include_inputs: $include_inputs
     exclude_inputs: $exclude_inputs
-    repo_dirs_root: $repo_dirs_root
     url_scheme: $url_scheme
   }
 }
@@ -97,7 +94,6 @@ def normalize-sync-spec [spec: record]: nothing -> record {
   # implementation works against one explicit record shape after normalization.
   let spec = (
     {
-      source_path: "devenv.yaml"
       output_path: "devenv.local.yaml"
       polyrepo_root: null
       repo_dirs_path: null
@@ -111,7 +107,6 @@ def normalize-sync-spec [spec: record]: nothing -> record {
   )
 
   let repo_root = require-path ($spec | get -o repo_root) "repo_root"
-  let source_path = require-path ($spec | get -o source_path) "source_path"
   let output_path = require-path ($spec | get -o output_path) "output_path"
   let url_scheme = require-string ($spec | get -o url_scheme) "url_scheme"
   let include_repos = expect-string-list ($spec | get -o include_repos | default []) "include_repos"
@@ -125,7 +120,6 @@ def normalize-sync-spec [spec: record]: nothing -> record {
 
   {
     repo_root: $repo_root
-    source_path: $source_path
     output_path: $output_path
     polyrepo_root: ($spec | get -o polyrepo_root)
     repo_dirs_path: ($spec | get -o repo_dirs_path)
@@ -149,6 +143,29 @@ def resolve-effective-repo-dirs-path [polyrepo_root: path repo_dirs_path: any]: 
   }
 
   repo-dirs-path-from-polyrepo-manifest $"polyrepo manifest '($manifest_path)'" (open --raw $manifest_path)
+}
+
+def current-repo-name [local_repo_paths: record repo_root: path polyrepo_root: path]: nothing -> oneof<string, nothing, error> {
+  let normalized_repo_root = ($repo_root | path expand --no-symlink | into string)
+  let normalized_polyrepo_root = ($polyrepo_root | path expand --no-symlink | into string)
+  let matches = (
+    $local_repo_paths
+    | transpose repo_name repo_path
+    | where repo_path == $normalized_repo_root
+  )
+
+  let repo_name = ($matches | get -o 0.repo_name)
+  if (($repo_name | describe) == 'string') {
+    return $repo_name
+  }
+
+  if $normalized_repo_root == $normalized_polyrepo_root {
+    return null
+  }
+
+  if (($repo_name | describe) != 'string') {
+    fail $"expected repo root ($normalized_repo_root) to be present in the manifest-owned repo catalog"
+  }
 }
 
 def make-lock-status [status: string input_name?: any]: nothing -> record {
@@ -405,34 +422,24 @@ export def render-local-overrides [spec: record]: nothing -> string {
 export def sync-local-overrides [spec: record]: nothing -> record {
   let spec = normalize-sync-spec $spec
   let repo_root = ($spec.repo_root | path expand --no-symlink)
-  let source_yaml_path = resolve-repo-path $repo_root $spec.source_path
   let output_yaml_path = resolve-repo-path $repo_root $spec.output_path
   let lock_path = (resolve-repo-path $repo_root "devenv.lock")
   let polyrepo_root = resolve-polyrepo-root $repo_root $spec.polyrepo_root $spec.repo_dirs_path
   let repo_dirs_path = resolve-effective-repo-dirs-path $polyrepo_root $spec.repo_dirs_path
   let repo_dirs_root = resolve-repo-dirs-root $polyrepo_root $repo_dirs_path
 
-  let source_yaml_text = open --raw $source_yaml_path
   let polyrepo_manifest_path = ($polyrepo_root | path join (polyrepo-manifest-basename))
-  let polyrepo_manifest_text = if ($polyrepo_manifest_path | path exists) {
-    open --raw $polyrepo_manifest_path
-  } else {
-    ""
-  }
-
-  # Recursive scans only reuse the same repo-relative source path in sibling
-  # repos. Absolute or unrelated paths intentionally disable that recursion.
-  let source_relative_path = maybe-relativize $source_yaml_path $repo_root
+  let polyrepo_manifest_text = open --raw $polyrepo_manifest_path
   let local_repo_paths = list-local-repo-paths $polyrepo_root $repo_dirs_root $spec.include_repos $spec.exclude_repos
-  let repo_names = ($local_repo_paths | columns | sort)
-  let repo_sources = load-repo-sources $local_repo_paths $source_relative_path
-  let shared_inputs_yaml_text = if ($polyrepo_manifest_text | str trim) != "" {
-    render-shared-inputs-yaml $"polyrepo manifest '((polyrepo-manifest-basename))'" $polyrepo_manifest_text
-  } else {
-    ""
+  let rendered = compute-rendered-overrides {
+    current_repo_name: (current-repo-name $local_repo_paths $repo_root $polyrepo_root)
+    polyrepo_manifest_text: $polyrepo_manifest_text
+    local_repo_paths: $local_repo_paths
+    include_inputs: $spec.include_inputs
+    exclude_inputs: $spec.exclude_inputs
+    url_scheme: $spec.url_scheme
   }
-  let rendered = build-overrides $source_yaml_text $shared_inputs_yaml_text $repo_names $local_repo_paths $repo_sources $spec.include_inputs $spec.exclude_inputs $repo_dirs_root $spec.url_scheme
-  let overrides_text = render-overrides-text $rendered.overrides $rendered.imports
+  let overrides_text = $rendered.text
   let local_repo_roots = (
     $rendered.local_repo_names
     | each {|repo_name| $local_repo_paths | get $repo_name }

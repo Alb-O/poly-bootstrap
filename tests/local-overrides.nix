@@ -346,9 +346,9 @@ in
       && rendered.inputs.docs-shared.flake == false
       && !(rendered.inputs ? remote-only)
       && rendered.imports == [
-        "docs-shared/subdir"
         "agent-scripts/tooling"
         "nusurf/nushell-plugin"
+        "docs-shared/subdir"
       ];
     expected = true;
   };
@@ -392,6 +392,63 @@ in
     expected = true;
   };
 
+  localInputOverrides."test sync no longer depends on consumer devenv yaml" = {
+    expr =
+      let
+        output = runSync {
+          derivationNamePrefix = "local-overrides-sync-without-source-yaml";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/app";
+          beforeRun = ''
+            mkdir "$out/repos/app/.git"
+            rm "$out/repos/app/devenv.yaml"
+          '';
+        };
+        rendered = readYaml "${output}/repos/app/devenv.local.yaml";
+      in
+      stripContext rendered.inputs.agent-scripts.url
+      == stripContext "path:${output}/repos/agent-scripts"
+      && stripContext rendered.inputs.docs-shared.url
+      == stripContext "path:${output}/repos/poly-docs-env";
+    expected = true;
+  };
+
+  localInputOverrides."test sync allows polyrepo root outside repo catalog" = {
+    expr =
+      let
+        output = runSyncJson {
+          derivationNamePrefix = "local-overrides-sync-polyrepo-root";
+          fixture = "recursive-polyrepo";
+          repoPath = ".";
+          extraArgs = [
+            "--polyrepo-root"
+            "."
+          ];
+          beforeSync = ''
+            cat > "$out/devenv.yaml" <<'EOF'
+            inputs: {}
+            imports: []
+            EOF
+          '';
+        };
+        status = readJson "${output}/status.json";
+        rendered = readYaml "${output}/devenv.local.yaml";
+      in
+      status.mode == "written"
+      && status.changed == true
+      && status.local_repo_count == 3
+      && stripContext rendered.inputs.agent-scripts.url
+      == stripContext "path:${output}/repos/agent-scripts"
+      && stripContext rendered.inputs.docs-shared.url
+      == stripContext "path:${output}/repos/poly-docs-env"
+      && rendered.imports == [
+        "agent-scripts/tooling"
+        "nusurf/nushell-plugin"
+        "docs-shared/subdir"
+      ];
+    expected = true;
+  };
+
   localInputOverrides."test render-manifest emits expected yaml" = {
     expr =
       let
@@ -400,22 +457,16 @@ in
           runRenderManifest {
             derivationNamePrefix = "local-overrides-render-manifest";
             manifest = {
-              source_yaml_text = builtins.readFile "${fixture}/repos/app/devenv.yaml";
+              current_repo_name = "app";
               polyrepo_manifest_text = builtins.readFile "${fixture}/polyrepo.nuon";
-              local_repo_names = [
-                "agent-scripts"
-                "nusurf"
-                "poly-docs-env"
-              ];
-              local_repo_paths = { };
-              repo_sources = {
-                agent-scripts = builtins.readFile "${fixture}/repos/agent-scripts/devenv.yaml";
-                nusurf = builtins.readFile "${fixture}/repos/nusurf/devenv.yaml";
-                poly-docs-env = builtins.readFile "${fixture}/repos/poly-docs-env/devenv.yaml";
+              local_repo_paths = {
+                agent-scripts = "${fixture}/repos/agent-scripts";
+                app = "${fixture}/repos/app";
+                nusurf = "${fixture}/repos/nusurf";
+                poly-docs-env = "${fixture}/repos/poly-docs-env";
               };
               include_inputs = [ ];
               exclude_inputs = [ ];
-              repo_dirs_root = "${fixture}/repos";
               url_scheme = "path";
             };
           }
@@ -426,9 +477,9 @@ in
       && stripContext rendered.inputs.docs-shared.url
       == stripContext "path:${fixturePath "recursive-polyrepo"}/repos/poly-docs-env"
       && rendered.imports == [
-        "docs-shared/subdir"
         "agent-scripts/tooling"
         "nusurf/nushell-plugin"
+        "docs-shared/subdir"
       ];
     expected = true;
   };
@@ -441,21 +492,16 @@ in
           runRenderManifest {
             derivationNamePrefix = "local-overrides-render-manifest-polyrepo";
             manifest = {
-              source_yaml_text = builtins.readFile "${fixture}/repos/app/devenv.yaml";
+              current_repo_name = "app";
               polyrepo_manifest_text = builtins.readFile "${fixture}/polyrepo.nuon";
-              local_repo_names = [
-                "agent-scripts"
-                "nusurf"
-                "poly-docs-env"
-              ];
-              repo_sources = {
-                agent-scripts = builtins.readFile "${fixture}/repos/agent-scripts/devenv.yaml";
-                nusurf = builtins.readFile "${fixture}/repos/nusurf/devenv.yaml";
-                poly-docs-env = builtins.readFile "${fixture}/repos/poly-docs-env/devenv.yaml";
+              local_repo_paths = {
+                agent-scripts = "${fixture}/repos/agent-scripts";
+                app = "${fixture}/repos/app";
+                nusurf = "${fixture}/repos/nusurf";
+                poly-docs-env = "${fixture}/repos/poly-docs-env";
               };
               include_inputs = [ ];
               exclude_inputs = [ ];
-              repo_dirs_root = "${fixture}/repos";
               url_scheme = "path";
             };
           }
@@ -466,9 +512,9 @@ in
       && stripContext rendered.inputs.docs-shared.url
       == stripContext "path:${fixturePath "recursive-polyrepo"}/repos/poly-docs-env"
       && rendered.imports == [
-        "docs-shared/subdir"
         "agent-scripts/tooling"
         "nusurf/nushell-plugin"
+        "docs-shared/subdir"
       ];
     expected = true;
   };
@@ -568,9 +614,9 @@ in
       && stripContext rendered.inputs.docs-shared.url
       == stripContext "path:${fixturePath "recursive-polyrepo"}/repos/poly-docs-env"
       && rendered.imports == [
-        "docs-shared/subdir"
         "agent-scripts/tooling"
         "nusurf/nushell-plugin"
+        "docs-shared/subdir"
       ];
     expected = true;
   };
@@ -709,7 +755,6 @@ in
           composer.localInputOverrides = {
             polyrepoRoot = null;
             repoDirsPath = null;
-            sourcePath = "devenv.yaml";
             outputPath = "devenv.local.yaml";
             urlScheme = "path";
             includeRepos = [ ];

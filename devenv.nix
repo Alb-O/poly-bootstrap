@@ -24,12 +24,6 @@ in
       description = "Directory path containing consumer repos. When null, read `repoDirsPath` from `polyrepo.nuon` at the effective polyrepo root.";
     };
 
-    sourcePath = lib.mkOption {
-      type = lib.types.str;
-      default = "devenv.yaml";
-      description = "Source devenv YAML file to scan for inputs and URLs.";
-    };
-
     outputPath = lib.mkOption {
       type = lib.types.str;
       default = "devenv.local.yaml";

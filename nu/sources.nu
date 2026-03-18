@@ -157,27 +157,27 @@ export def expect-string-record [value: any field_label: string]: nothing -> one
   | into record
 }
 
-def expect-optional-imports [value: any source_label: string]: nothing -> oneof<list<string>, error> {
+def expect-optional-string-list [value: any source_label: string field_label: string]: nothing -> oneof<list<string>, error> {
   if (($value | describe) == 'nothing') {
     return []
   }
 
   if (($value | describe) !~ '^list') {
-    fail $"expected imports in ($source_label) to be a list"
+    fail $"expected ($field_label) in ($source_label) to be a list"
   }
 
   $value
   | each {|item|
       if (($item | describe) != 'string') or ($item | is-empty) {
-        fail $"expected imports in ($source_label) to be non-empty strings"
+        fail $"expected ($field_label) in ($source_label) to be non-empty strings"
       }
 
       $item
     }
 }
 
-def normalize-shared-input-entry [input_name: string input_value: any manifest_label: string]: nothing -> oneof<record, error> {
-  let source_label = $"sharedInputs.($input_name) in ($manifest_label)"
+def normalize-polyrepo-input-entry [input_name: string input_value: any manifest_label: string]: nothing -> oneof<record, error> {
+  let source_label = $"inputs.($input_name) in ($manifest_label)"
 
   match ($input_value | describe) {
     "string" => {
@@ -186,20 +186,35 @@ def normalize-shared-input-entry [input_name: string input_value: any manifest_l
       }
 
       {
-        spec: $input_value
+        spec: { url: $input_value }
         imports: []
+        localRepo: null
       }
     }
     $t if $t =~ '^record' => {
-      let entry_spec = if "imports" in ($input_value | columns) {
-        $input_value | reject imports
-      } else {
+      let entry_spec = (
         $input_value
+        | reject --optional imports localRepo
+      )
+      let local_repo = ($input_value | get -o localRepo)
+      let url = ($entry_spec | get -o url)
+
+      if (($url | describe) != 'string') or ($url | is-empty) {
+        fail $"expected ($source_label) to define a non-empty url"
+      }
+
+      let normalized_local_repo = if (($local_repo | describe) == 'nothing') {
+        null
+      } else if (($local_repo | describe) == 'string') and (not ($local_repo | is-empty)) {
+        $local_repo
+      } else {
+        fail $"expected localRepo in ($source_label) to be a non-empty string"
       }
 
       {
         spec: $entry_spec
-        imports: (expect-optional-imports ($input_value | get -o imports) $source_label)
+        imports: (expect-optional-string-list ($input_value | get -o imports) $source_label "imports")
+        localRepo: $normalized_local_repo
       }
     }
     _ => {
@@ -208,44 +223,59 @@ def normalize-shared-input-entry [input_name: string input_value: any manifest_l
   }
 }
 
-export def render-shared-inputs-yaml [manifest_label: string manifest_text: string]: nothing -> oneof<string, error> {
-  let manifest = parse-top-level-nuon-mapping $manifest_label $manifest_text
-  let shared_inputs = ($manifest | get -o sharedInputs | default {})
-  let shared_imports = ($manifest | get -o sharedImports | default [])
+def normalize-polyrepo-overlay-entry [overlay_type: string overlay_name: string overlay_value: any manifest_label: string]: nothing -> oneof<record, error> {
+  let source_label = $"($overlay_type).($overlay_name) in ($manifest_label)"
 
-  if (($shared_inputs | describe) !~ '^record') {
-    fail $"expected sharedInputs in ($manifest_label) to be a mapping"
+  if (($overlay_value | describe) !~ '^record') {
+    fail $"expected ($source_label) to be a mapping"
   }
 
-  let shared_imports = expect-optional-imports $shared_imports $manifest_label
-  mut rendered_inputs = {}
-  mut rendered_imports = $shared_imports
-
-  for input_name in ($shared_inputs | columns) {
-    let entry = normalize-shared-input-entry $input_name ($shared_inputs | get $input_name) $manifest_label
-    $rendered_inputs = ($rendered_inputs | merge { $input_name: $entry.spec })
-    $rendered_imports = ($rendered_imports | append $entry.imports)
+  {
+    extends: (expect-optional-string-list ($overlay_value | get -o extends) $source_label "extends")
+    inputs: (expect-optional-string-list ($overlay_value | get -o inputs) $source_label "inputs")
+    imports: (expect-optional-string-list ($overlay_value | get -o imports) $source_label "imports")
   }
-
-  if (($rendered_inputs | columns | is-empty) and ($rendered_imports | is-empty)) {
-    return ""
-  }
-
-  mut rendered = {}
-
-  if not ($rendered_inputs | columns | is-empty) {
-    $rendered = ($rendered | merge { inputs: $rendered_inputs })
-  }
-
-  let rendered_imports = ($rendered_imports | uniq)
-  if not ($rendered_imports | is-empty) {
-    $rendered = ($rendered | merge { imports: $rendered_imports })
-  }
-
-  $rendered | to yaml
 }
 
-export def repo-dirs-path-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<path, error> {
+def normalize-polyrepo-repo-entry [repo_value: any manifest_label: string]: nothing -> oneof<record, error> {
+  let source_label = $"repos entry in ($manifest_label)"
+
+  if (($repo_value | describe) !~ '^record') {
+    fail $"expected ($source_label) to be a mapping"
+  }
+
+  let repo_path = ($repo_value | get -o path)
+  if (($repo_path | describe) != 'string') or ($repo_path | is-empty) {
+    fail $"expected path in ($source_label) to be a non-empty string"
+  }
+
+  let repo_name = ($repo_value | get -o name | default ($repo_path | path basename))
+  if (($repo_name | describe) != 'string') or ($repo_name | is-empty) {
+    fail $"expected name in ($source_label) to be a non-empty string"
+  }
+
+  let bundle = ($repo_value | get -o bundle)
+  let bundle = if (($bundle | describe) == 'nothing') {
+    null
+  } else if (($bundle | describe) == 'string') and (not ($bundle | is-empty)) {
+    $bundle
+  } else {
+    fail $"expected bundle in ($source_label) to be a non-empty string"
+  }
+
+  let normalized = {
+    name: $repo_name
+    path: $repo_path
+    bundle: $bundle
+    profiles: (expect-optional-string-list ($repo_value | get -o profiles) $source_label "profiles")
+    inputs: (expect-optional-string-list ($repo_value | get -o inputs) $source_label "inputs")
+    imports: (expect-optional-string-list ($repo_value | get -o imports) $source_label "imports")
+  }
+
+  $normalized
+}
+
+export def polyrepo-model-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<record, error> {
   let manifest = parse-top-level-nuon-mapping $manifest_label $manifest_text
   let repo_dirs_path = ($manifest | get -o repoDirsPath)
 
@@ -253,23 +283,80 @@ export def repo-dirs-path-from-polyrepo-manifest [manifest_label: string manifes
     fail $"expected repoDirsPath in ($manifest_label) to be a non-empty string"
   }
 
-  $repo_dirs_path
-}
+  let inputs_catalog = ($manifest | get -o inputs | default {})
+  let bundles_catalog = ($manifest | get -o bundles | default {})
+  let profiles_catalog = ($manifest | get -o profiles | default {})
+  let repos_catalog = ($manifest | get -o repos | default [])
 
-export def repo-paths-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<list<path>, error> {
-  let manifest = parse-top-level-nuon-mapping $manifest_label $manifest_text
-  let repos = ($manifest | get -o repos)
+  if (($inputs_catalog | describe) !~ '^record') {
+    fail $"expected inputs in ($manifest_label) to be a mapping"
+  }
 
-  if (($repos | describe) != 'list<any>') and (($repos | describe) !~ '^list') {
+  if (($bundles_catalog | describe) !~ '^record') {
+    fail $"expected bundles in ($manifest_label) to be a mapping"
+  }
+
+  if (($profiles_catalog | describe) !~ '^record') {
+    fail $"expected profiles in ($manifest_label) to be a mapping"
+  }
+
+  if (($repos_catalog | describe) !~ '^(list|table)') {
     fail $"expected repos in ($manifest_label) to be a list"
   }
 
-  $repos
-  | each {|repo_path|
-      if (($repo_path | describe) != 'string') or ($repo_path | is-empty) {
-        fail $"expected repos entries in ($manifest_label) to be non-empty strings"
-      }
+  let repos = (
+    $repos_catalog
+    | each {|repo_value| normalize-polyrepo-repo-entry $repo_value $manifest_label }
+  )
+  let duplicate_repo_names = (
+    $repos
+    | group-by name
+    | transpose name entries
+    | where {|group| (($group.entries | length) > 1) }
+    | each {|group| $group.name }
+    | sort
+  )
 
-      $repo_path
-    }
+  if not ($duplicate_repo_names | is-empty) {
+    fail $"expected repos in ($manifest_label) to use unique names: ($duplicate_repo_names | str join ', ')"
+  }
+
+  {
+    repoDirsPath: $repo_dirs_path
+    defaultProfiles: (expect-optional-string-list ($manifest | get -o defaultProfiles) $manifest_label "defaultProfiles")
+    inputs: (
+      $inputs_catalog
+      | items {|input_name, input_value|
+          [$input_name (normalize-polyrepo-input-entry $input_name $input_value $manifest_label)]
+        }
+      | into record
+    )
+    bundles: (
+      $bundles_catalog
+      | items {|bundle_name, bundle_value|
+          [$bundle_name (normalize-polyrepo-overlay-entry "bundles" $bundle_name $bundle_value $manifest_label)]
+        }
+      | into record
+    )
+    profiles: (
+      $profiles_catalog
+      | items {|profile_name, profile_value|
+          [$profile_name (normalize-polyrepo-overlay-entry "profiles" $profile_name $profile_value $manifest_label)]
+        }
+      | into record
+    )
+    repos: $repos
+  }
+}
+
+export def repo-dirs-path-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<path, error> {
+  polyrepo-model-from-polyrepo-manifest $manifest_label $manifest_text | get repoDirsPath
+}
+
+export def repo-records-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<list<record>, error> {
+  polyrepo-model-from-polyrepo-manifest $manifest_label $manifest_text | get repos
+}
+
+export def repo-paths-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<list<path>, error> {
+  repo-records-from-polyrepo-manifest $manifest_label $manifest_text | get path
 }

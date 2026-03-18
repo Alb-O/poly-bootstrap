@@ -1,7 +1,29 @@
 {
   repoDirsPath: "repos"
 
+  defaultProfiles: [ "local-only" ]
+
+  inputs: {
+    agent-scripts: {
+      url: "github:Alb-O/agent-scripts"
+      flake: false
+    }
+  }
+
+  bundles: {
+    empty: {}
+  }
+
+  profiles: {
+    local-only: {
+      inputs: [ "agent-scripts" ]
+    }
+  }
+
   repos: [
-    "repos/app"
+    {
+      path: "repos/app"
+      bundle: "empty"
+    }
   ]
 }

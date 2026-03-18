@@ -3,7 +3,7 @@
 use ../nu/cli.nu [build-sync-spec render-json-status sync-help-requested]
 use ../nu/commands.nu [lock-status render-manifest-file sync-local-overrides]
 
-# Generate local input overrides for sibling repos.
+# Generate manifest-owned local input overrides for sibling repos.
 #
 # Use `main sync` for normal repo updates, `main render-manifest` for machine
 # renderers, and `main lock-status` for lockfile diagnostics.
@@ -13,12 +13,13 @@ def main [] {
 
 # Render local input overrides from a single machine manifest.
 #
-# The manifest is a JSON mapping with inline YAML text, repo lists, repo source
-# text, include/exclude filters, the repo directory root, and the URL scheme.
+# The manifest is a JSON mapping with the current repo name, inline
+# `polyrepo.nuon` text, filtered local repo paths, include/exclude filters, and
+# the URL scheme.
 def "main render-manifest" [
   manifest_path: path # JSON manifest describing one render invocation.
 ] {
-  render-manifest-file $manifest_path
+  print --raw (render-manifest-file $manifest_path)
 }
 
 # Sync local input overrides into a repo checkout.
@@ -29,7 +30,6 @@ def "main render-manifest" [
 # repeatable filters are parsed from the wrapped rest arguments.
 def --wrapped "main sync" [
   repo_root?: path                # Consumer repo root. Defaults to `.`.
-  --source-path (-s): path        # Source YAML path inside the consumer repo.
   --output-path (-o): path        # Generated override YAML path inside the consumer repo.
   --polyrepo-root (-p): path      # Explicit polyrepo root when inference is not possible.
   --repo-dirs-path (-r): path     # Path to the sibling repo directory. Defaults to repoDirsPath from polyrepo.nuon.
@@ -41,7 +41,7 @@ def --wrapped "main sync" [
     return (help main sync)
   }
 
-  let spec = build-sync-spec $repo_root $source_path $output_path $polyrepo_root $repo_dirs_path $url_scheme $rest
+  let spec = build-sync-spec $repo_root $output_path $polyrepo_root $repo_dirs_path $url_scheme $rest
   render-json-status (sync-local-overrides $spec) $json
 }
 

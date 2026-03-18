@@ -1,4 +1,4 @@
-use sources.nu [repo-dirs-path-from-polyrepo-manifest repo-paths-from-polyrepo-manifest]
+use sources.nu [repo-dirs-path-from-polyrepo-manifest repo-paths-from-polyrepo-manifest repo-records-from-polyrepo-manifest]
 use support.nu [fail polyrepo-manifest-basename]
 
 export def get-import-input-name [import_name: string]: nothing -> oneof<string, nothing> {
@@ -145,10 +145,10 @@ export def list-local-repo-paths [polyrepo_root: path repo_dirs_root: path inclu
   let manifest_label = $"polyrepo manifest '($manifest_path)'"
   let manifest_text = open --raw $manifest_path
   let declared_repo_roots = (
-    repo-paths-from-polyrepo-manifest $manifest_label $manifest_text
-    | each {|repo_path|
-        let resolved_path = resolve-repo-path $polyrepo_root $repo_path
-        let resolved_name = ($resolved_path | path basename)
+    repo-records-from-polyrepo-manifest $manifest_label $manifest_text
+    | each {|repo_entry|
+        let resolved_path = resolve-repo-path $polyrepo_root $repo_entry.path
+        let resolved_name = $repo_entry.name
         let relative_path = maybe-relativize $resolved_path $repo_dirs_root
 
         if (($relative_path | describe) == 'nothing') {
@@ -186,7 +186,7 @@ export def list-local-repo-paths [polyrepo_root: path repo_dirs_root: path inclu
       | sort
       | str join ", "
     )
-    fail $"multiple local repos share the same basename under ($repo_dirs_root): ($duplicate_list)"
+    fail $"multiple local repos share the same manifest name under ($repo_dirs_root): ($duplicate_list)"
   }
 
   $filtered

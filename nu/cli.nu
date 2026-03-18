@@ -71,7 +71,6 @@ export def sync-help-requested [repo_root: any rest: list<string>]: nothing -> b
 
 export def build-sync-spec [
   repo_root: any
-  source_path: any
   output_path: any
   polyrepo_root: any
   repo_dirs_path: any
@@ -82,7 +81,6 @@ export def build-sync-spec [
 
   {
     repo_root: ($repo_root | default ".")
-    source_path: ($source_path | default "devenv.yaml")
     output_path: ($output_path | default "devenv.local.yaml")
     polyrepo_root: $polyrepo_root
     repo_dirs_path: $repo_dirs_path

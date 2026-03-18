@@ -36,12 +36,12 @@ let
           state
         else
           let
-            entryMatch = builtins.match "^[[:space:]]*\"([^\"]+)\"[[:space:]]*$" line;
+            entryMatch = builtins.match "^[[:space:]]*path[[:space:]]*:[[:space:]]*\"([^\"]+)\"[[:space:]]*$" line;
           in
-          if entryMatch == null then
-            throw "polyrepo.nuon repos must be a list of quoted path strings, one per line"
+          if entryMatch != null then
+            state // { paths = state.paths ++ [ (builtins.elemAt entryMatch 0) ]; }
           else
-            state // { paths = state.paths ++ [ (builtins.elemAt entryMatch 0) ]; };
+            state;
       result = lib.foldl' step { inRepos = false; completed = false; paths = [ ]; } lines;
     in
     if !result.completed then
@@ -135,10 +135,6 @@ let
           path = resolvedPath;
         }
     ) (readManifestRepoPaths polyrepoManifestPath);
-  sourcePath =
-    if lib.hasPrefix "/" cfg.sourcePath
-    then cfg.sourcePath
-    else "${config.devenv.root}/${cfg.sourcePath}";
   filteredRepoRoots = lib.filter (
     repo:
     (includeRepos == [ ] || builtins.elem repo.name includeRepos)
@@ -159,38 +155,20 @@ let
     map (repo: lib.nameValuePair repo.name repo.path) filteredRepoRoots;
   repoPaths = builtins.listToAttrs repoPathPairs;
   repoNames = lib.sort builtins.lessThan (builtins.attrNames repoPaths);
-  # Keep recursive scans repo-relative; unrelated absolute paths stay disabled.
-  sourceRelativePath =
-    if lib.hasPrefix "${currentRoot}/" sourcePath then
-      lib.removePrefix "${currentRoot}/" sourcePath
-    else if lib.hasPrefix "/" sourcePath then
-      null
+  currentRepoName =
+    let
+      matches = lib.filter (repo: repo.path == currentRoot) filteredRepoRoots;
+    in
+    if matches == [ ] then
+      if currentRoot == polyrepoRoot then
+        null
+      else
+        throw "the current repo root must be present in the manifest-owned repo catalog after include/exclude filtering"
     else
-      sourcePath;
-  repoSources = builtins.listToAttrs (
-    lib.filter (entry: entry != null) (
-      map (
-        repoName:
-        let
-          repoSourcePath =
-            if sourceRelativePath == null then
-              null
-            else
-              "${builtins.getAttr repoName repoPaths}/${sourceRelativePath}";
-        in
-        if repoSourcePath != null && builtins.pathExists repoSourcePath then
-          {
-            name = repoName;
-            value = builtins.readFile repoSourcePath;
-          }
-        else
-          null
-      ) repoNames
-    )
-  );
+      (builtins.head matches).name;
 in
 {
-  inherit polyrepoManifestPath polyrepoRoot repoDirsPath repoDirsRoot repoNames repoPaths repoSources sourcePath;
+  inherit polyrepoManifestPath polyrepoRoot repoDirsPath repoDirsRoot currentRepoName repoNames repoPaths;
   polyrepoManifestText =
     if builtins.pathExists polyrepoManifestPath
     then builtins.readFile polyrepoManifestPath
