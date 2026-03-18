@@ -902,7 +902,7 @@ def latest-shell-export [repo_root: path]: nothing -> oneof<path, nothing> {
 def materialize-shell-export [repo_root: path]: nothing -> nothing {
   do {
     cd $repo_root
-    ^devenv shell --no-tui -- bash -lc "true" | ignore
+    ^devenv shell --no-tui --no-eval-cache --refresh-eval-cache -- bash -lc "true" | ignore
   }
 }
 
