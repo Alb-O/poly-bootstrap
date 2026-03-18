@@ -18,6 +18,36 @@ let
       throw "polyrepo.nuon must define repoDirsPath as a single-line string field"
     else
       builtins.elemAt (builtins.head matches) 0;
+  readManifestRepoPaths =
+    manifestPath:
+    let
+      manifestText = builtins.readFile manifestPath;
+      lines = lib.splitString "\n" manifestText;
+      step =
+        state: line:
+        if !state.inRepos then
+          if builtins.match "^[[:space:]]*repos[[:space:]]*:[[:space:]]*\\[[[:space:]]*$" line != null then
+            state // { inRepos = true; }
+          else
+            state
+        else if builtins.match "^[[:space:]]*][[:space:]]*$" line != null then
+          state // { inRepos = false; completed = true; }
+        else if builtins.match "^[[:space:]]*$" line != null then
+          state
+        else
+          let
+            entryMatch = builtins.match "^[[:space:]]*\"([^\"]+)\"[[:space:]]*$" line;
+          in
+          if entryMatch == null then
+            throw "polyrepo.nuon repos must be a list of quoted path strings, one per line"
+          else
+            state // { paths = state.paths ++ [ (builtins.elemAt entryMatch 0) ]; };
+      result = lib.foldl' step { inRepos = false; completed = false; paths = [ ]; } lines;
+    in
+    if !result.completed then
+      throw "polyrepo.nuon must define repos as a multiline list"
+    else
+      result.paths;
   findPolyrepoRoot =
     repoRoot:
     let
@@ -26,20 +56,15 @@ let
         let
           manifestPath = "${candidate}/polyrepo.nuon";
           parent = dirOf candidate;
-          repoDirsPath = if builtins.pathExists manifestPath then readManifestRepoDirsPath manifestPath else null;
-          candidateRepoDirsRoot =
-            if repoDirsPath == null || lib.hasPrefix "/" repoDirsPath then
-              null
+          candidateRepoPaths =
+            if builtins.pathExists manifestPath then
+              map (
+                repoPath:
+                if lib.hasPrefix "/" repoPath then repoPath else "${candidate}/${repoPath}"
+              ) (readManifestRepoPaths manifestPath)
             else
-              "${candidate}/${repoDirsPath}";
-          repoParent = dirOf repoRoot;
-          repoGrandparent = dirOf repoParent;
-          matchesCandidate =
-            candidateRepoDirsRoot != null
-            && (
-              repoParent == candidateRepoDirsRoot
-              || repoGrandparent == candidateRepoDirsRoot
-            );
+              [ ];
+          matchesCandidate = builtins.elem repoRoot candidateRepoPaths;
         in
         if builtins.pathExists manifestPath && matchesCandidate then
           candidate
@@ -51,12 +76,6 @@ let
     go repoRoot;
   normalizeSegments =
     path: lib.filter (segment: segment != "" && segment != ".") (lib.splitString "/" path);
-  dirnameN =
-    levels: path:
-    if levels <= 0 then
-      path
-    else
-      dirnameN (levels - 1) (dirOf path);
   isRepoRoot =
     path:
     builtins.pathExists "${path}/.git"
@@ -93,50 +112,38 @@ let
     then [ ]
     else normalizeSegments repoDirsPath;
   polyrepoManifestPath = "${polyrepoRoot}/polyrepo.nuon";
+  declaredRepoRoots =
+    map (
+      repoPath:
+      let
+        resolvedPath = if lib.hasPrefix "/" repoPath then repoPath else "${polyrepoRoot}/${repoPath}";
+        relativePath =
+          if lib.hasPrefix "/" repoDirsPath then
+            if lib.hasPrefix "${repoDirsPath}/" resolvedPath then lib.removePrefix "${repoDirsPath}/" resolvedPath else null
+          else if lib.hasPrefix "${repoDirsRoot}/" resolvedPath then
+            lib.removePrefix "${repoDirsRoot}/" resolvedPath
+          else
+            null;
+      in
+      if relativePath == null && resolvedPath != repoDirsRoot then
+        throw "polyrepo.nuon repos entries must stay under the effective repoDirsPath"
+      else if !isRepoRoot resolvedPath then
+        throw "polyrepo.nuon repos entries must point at repo roots"
+      else
+        {
+          name = baseNameOf resolvedPath;
+          path = resolvedPath;
+        }
+    ) (readManifestRepoPaths polyrepoManifestPath);
   sourcePath =
     if lib.hasPrefix "/" cfg.sourcePath
     then cfg.sourcePath
     else "${config.devenv.root}/${cfg.sourcePath}";
-  # Discover repos at eval time; the builder cannot reliably probe host paths.
-  repoEntries =
-    if builtins.pathExists repoDirsRoot
-    then builtins.readDir repoDirsRoot
-    else { };
-  discoveredRepoRoots =
-    lib.concatMap (
-      entryName:
-      let
-        entryType = builtins.getAttr entryName repoEntries;
-        entryPath = "${repoDirsRoot}/${entryName}";
-      in
-      if entryType != "directory" then
-        [ ]
-      else if isRepoRoot entryPath then
-        [ { name = entryName; path = entryPath; } ]
-      else
-        let
-          nestedEntries =
-            if builtins.pathExists entryPath
-            then builtins.readDir entryPath
-            else { };
-        in
-        lib.concatMap (
-          nestedName:
-          let
-            nestedType = builtins.getAttr nestedName nestedEntries;
-            nestedPath = "${entryPath}/${nestedName}";
-          in
-          if nestedType == "directory" && isRepoRoot nestedPath then
-            [ { name = nestedName; path = nestedPath; } ]
-          else
-            [ ]
-        ) (builtins.attrNames nestedEntries)
-    ) (builtins.attrNames repoEntries);
   filteredRepoRoots = lib.filter (
     repo:
     (includeRepos == [ ] || builtins.elem repo.name includeRepos)
     && !(builtins.elem repo.name excludeRepos)
-  ) discoveredRepoRoots;
+  ) declaredRepoRoots;
   duplicateRepoNames =
     lib.filter (repoName: (lib.length (lib.filter (repo: repo.name == repoName) filteredRepoRoots)) > 1)
       (lib.unique (map (repo: repo.name) filteredRepoRoots));

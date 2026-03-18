@@ -1,14 +1,13 @@
 use overrides.nu [build-overrides render-overrides-text]
 use paths.nu [
-  find-repo-root
   list-local-repo-paths
-  list-local-repo-names
   load-repo-sources
   maybe-relativize
   path-from-url
   resolve-polyrepo-root
   resolve-repo-dirs-root
   resolve-repo-path
+  find-repo-root
 ]
 use sources.nu [
   expect-string-list
@@ -393,7 +392,7 @@ def bootstrap-target-repo-roots [spec: record]: nothing -> list<path> {
   let repo_dirs_path = resolve-effective-repo-dirs-path $polyrepo_root $spec.repo_dirs_path
   let repo_dirs_root = resolve-repo-dirs-root $polyrepo_root $repo_dirs_path
 
-  list-local-repo-paths $repo_dirs_root [] []
+  list-local-repo-paths $polyrepo_root $repo_dirs_root [] []
   | values
   | each {|path| $path | path expand --no-symlink }
   | sort
@@ -424,7 +423,7 @@ export def sync-local-overrides [spec: record]: nothing -> record {
   # Recursive scans only reuse the same repo-relative source path in sibling
   # repos. Absolute or unrelated paths intentionally disable that recursion.
   let source_relative_path = maybe-relativize $source_yaml_path $repo_root
-  let local_repo_paths = list-local-repo-paths $repo_dirs_root $spec.include_repos $spec.exclude_repos
+  let local_repo_paths = list-local-repo-paths $polyrepo_root $repo_dirs_root $spec.include_repos $spec.exclude_repos
   let repo_names = ($local_repo_paths | columns | sort)
   let repo_sources = load-repo-sources $local_repo_paths $source_relative_path
   let shared_inputs_yaml_text = if ($polyrepo_manifest_text | str trim) != "" {

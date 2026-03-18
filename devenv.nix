@@ -15,7 +15,7 @@ in
     polyrepoRoot = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "Polyrepo root used for generated overrides. When null, infer it from the nearest enclosing `polyrepo.nuon` root, falling back to repo layout heuristics.";
+      description = "Polyrepo root used for generated overrides. When null, infer it from the nearest enclosing `polyrepo.nuon` whose repo catalog contains the current repo.";
     };
 
     repoDirsPath = lib.mkOption {

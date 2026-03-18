@@ -1,8 +1,8 @@
 # Poly Bootstrap
 
 Reusable `devenv` module that generates `devenv.local.yaml` with local path overrides
-for inputs in `devenv.yaml` whose remote repo name matches a local repo discovered
-under the consumer repo directory configured by `composer.localInputOverrides.repoDirsPath`.
+for inputs in `devenv.yaml` whose remote repo name matches a local repo declared
+in the enclosing `polyrepo.nuon` manifest.
 
 It also walks local repos transitively. If repo `A` imports local repo `B`, and
 `B` imports local repo `C`, then `A`'s generated `devenv.local.yaml` will include
@@ -46,9 +46,9 @@ devenv shell --no-tui -- bash -lc 'run-nix-tests'
   shared across the repos in your polyrepo.
 - Nested imports such as `repo-name/subdir` resolve to a real module path inside
   the input repo. They do not refer to an `outputs.<name>` attr.
-- If `${polyrepoRoot}/polyrepo.nuon` exists, `sharedInputs` and
-  `sharedImports` are treated as the shared defaults for every generated
-  `devenv.local.yaml`.
+- `${polyrepoRoot}/polyrepo.nuon` owns the repo catalog through `repos`, and
+  also provides `sharedInputs` / `sharedImports` for generated
+  `devenv.local.yaml` files.
 - `devenv.local.yaml` must exist before `devenv` starts. `devenv` loads local
   YAML during config/bootstrap, while this module runs later during Nix module
   evaluation. So the module can keep the file in sync, but it cannot bootstrap
@@ -61,9 +61,9 @@ eval "$(devenv direnvrc)"
 use devenv
 ```
 
-- Repo discovery scans direct children of `repoDirsPath`, and if a child is not
-  itself a repo root, it scans that child one level deeper. This supports grouped
-  layouts such as `repos/nusim/nusim_app` without doing a deep recursive walk.
+- A repo belongs to the polyrepo only when its path appears in `polyrepo.nuon`.
+  The runtime and Nix paths both use that manifest-owned repo catalog instead of
+  scanning the filesystem heuristically.
 
 - Existing stale `devenv.local.yaml` files still need one refresh before newly
   discovered transitive overrides can affect the next evaluation.
@@ -104,9 +104,9 @@ composer.localInputOverrides = {
 };
 ```
 
-When the current repo already lives under `${polyrepoRoot}/${repoDirsPath}/...`,
-or one grouping directory below it, `polyrepoRoot` can usually be omitted and inferred. Top-level polyrepo configs
-should set it explicitly.
+When the current repo appears in the enclosing `polyrepo.nuon` repo catalog,
+`polyrepoRoot` can usually be omitted and inferred. Top-level polyrepo configs
+should still set it explicitly.
 
 ## Which Command To Use
 
@@ -132,7 +132,7 @@ Bootstrap a repo before `devenv` starts:
 nu bin/bootstrap-repo.nu .
 ```
 
-Bootstrap every discovered repo under `repoDirsPath`:
+Bootstrap every repo declared in the manifest catalog:
 
 ```bash
 nu bin/bootstrap-repo.nu --all-repos --polyrepo-root /path/to/polyrepo
@@ -189,6 +189,11 @@ whole polyrepo:
 {
   repoDirsPath: "repos"
 
+  repos: [
+    "repos/agent-scripts"
+    "repos/nusurf"
+  ]
+
   sharedInputs: {
     agent-scripts: {
       url: "github:Alb-O/agent-scripts"
@@ -203,6 +208,10 @@ whole polyrepo:
   }
 }
 ```
+
+`repos` is the authoritative repo catalog for bootstrap, root inference, and
+local path override resolution. Each entry is a repo-relative or absolute repo
+root path.
 
 Each `sharedInputs.<name>` entry accepts the normal input spec fields plus an
 optional `imports` list. `sharedImports` can be used for imports that are not

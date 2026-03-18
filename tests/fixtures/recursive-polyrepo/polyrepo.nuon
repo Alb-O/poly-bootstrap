@@ -1,6 +1,13 @@
 {
   repoDirsPath: "repos"
 
+  repos: [
+    "repos/agent-scripts"
+    "repos/app"
+    "repos/nusurf"
+    "repos/poly-docs-env"
+  ]
+
   sharedInputs: {
     docs-shared: {
       url: "github:Alb-O/poly-docs-env"

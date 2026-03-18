@@ -10,7 +10,7 @@ def main [
   --polyrepo-root (-p): path    # Explicit polyrepo root when inference is not possible.
   --repo-dirs-path (-r): path   # Path to the sibling repo directory. Defaults to repoDirsPath from polyrepo.nuon.
   --url-scheme (-u): string     # Override URL scheme: path or git+file.
-  --all-repos (-a)              # Bootstrap every discovered repo root under `repo-dirs-path`.
+  --all-repos (-a)              # Bootstrap every repo root declared in `polyrepo.nuon`.
   --json (-j)                   # Emit structured JSON status instead of silence.
   ...rest: string               # Repeatable include/exclude filters.
 ] {

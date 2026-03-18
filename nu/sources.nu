@@ -255,3 +255,21 @@ export def repo-dirs-path-from-polyrepo-manifest [manifest_label: string manifes
 
   $repo_dirs_path
 }
+
+export def repo-paths-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<list<path>, error> {
+  let manifest = parse-top-level-nuon-mapping $manifest_label $manifest_text
+  let repos = ($manifest | get -o repos)
+
+  if (($repos | describe) != 'list<any>') and (($repos | describe) !~ '^list') {
+    fail $"expected repos in ($manifest_label) to be a list"
+  }
+
+  $repos
+  | each {|repo_path|
+      if (($repo_path | describe) != 'string') or ($repo_path | is-empty) {
+        fail $"expected repos entries in ($manifest_label) to be non-empty strings"
+      }
+
+      $repo_path
+    }
+}

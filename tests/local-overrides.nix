@@ -512,7 +512,7 @@ in
     expected = true;
   };
 
-  localInputOverrides."test sync json exposes discovered local repo roots" = {
+  localInputOverrides."test sync json exposes declared local repo roots" = {
     expr =
       let
         output = runSyncJson {

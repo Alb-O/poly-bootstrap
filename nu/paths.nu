@@ -1,4 +1,4 @@
-use sources.nu [repo-dirs-path-from-polyrepo-manifest]
+use sources.nu [repo-dirs-path-from-polyrepo-manifest repo-paths-from-polyrepo-manifest]
 use support.nu [fail polyrepo-manifest-basename]
 
 export def get-import-input-name [import_name: string]: nothing -> oneof<string, nothing> {
@@ -47,35 +47,6 @@ export def resolve-repo-path [repo_root: path candidate_path: path]: nothing -> 
   }
 }
 
-def normalize-segments [path_value: path]: nothing -> list<string> {
-  $path_value | split row "/" | where {|segment| ($segment != "") and ($segment != ".") }
-}
-
-def dirname-n [levels: int path_value: path]: nothing -> path {
-  mut current = $path_value
-  mut remaining = $levels
-
-  while $remaining > 0 {
-    $current = ($current | path dirname)
-    $remaining = ($remaining - 1)
-  }
-
-  $current
-}
-
-def repo-matches-polyrepo-root [repo_root: path polyrepo_root: path repo_dirs_path: path]: nothing -> bool {
-  if ($repo_dirs_path | str starts-with "/") {
-    return false
-  }
-
-  let repo_root = ($repo_root | path expand --no-symlink)
-  let repo_parent = ($repo_root | path dirname)
-  let repo_grandparent = ($repo_parent | path dirname)
-  let candidate_repo_dirs_root = (($polyrepo_root | path join $repo_dirs_path) | path expand --no-symlink)
-
-  ($repo_parent == $candidate_repo_dirs_root) or ($repo_grandparent == $candidate_repo_dirs_root)
-}
-
 export def resolve-repo-dirs-root [polyrepo_root: path repo_dirs_path: path]: nothing -> path {
   resolve-repo-path $polyrepo_root $repo_dirs_path
 }
@@ -109,15 +80,22 @@ export def find-repo-root [start_path: path]: nothing -> oneof<path, nothing> {
 }
 
 export def find-polyrepo-root [repo_root: path]: nothing -> oneof<path, nothing> {
-  mut current = ($repo_root | path expand --no-symlink)
+  let repo_root = ($repo_root | path expand --no-symlink)
+  mut current = $repo_root
 
   while true {
     let manifest_path = (polyrepo-manifest-path $current)
 
     if ($manifest_path | path exists) {
-      let repo_dirs_path = repo-dirs-path-from-polyrepo-manifest $"polyrepo manifest '($manifest_path)'" (open --raw $manifest_path)
+      let current_root = $current
+      let manifest_label = $"polyrepo manifest '($manifest_path)'"
+      let manifest_text = open --raw $manifest_path
+      let repo_catalog_paths = (
+        repo-paths-from-polyrepo-manifest $manifest_label $manifest_text
+        | each {|repo_path| resolve-repo-path $current_root $repo_path }
+      )
 
-      if (repo-matches-polyrepo-root $repo_root $current $repo_dirs_path) {
+      if $repo_root in $repo_catalog_paths {
         return $current
       }
     }
@@ -128,44 +106,6 @@ export def find-polyrepo-root [repo_root: path]: nothing -> oneof<path, nothing>
     }
 
     $current = $parent
-  }
-}
-
-def infer-polyrepo-root [repo_root: path repo_dirs_path: any]: nothing -> oneof<path, nothing> {
-  if (($repo_dirs_path | describe) != 'string') {
-    return null
-  }
-
-  if ($repo_dirs_path | str starts-with "/") {
-    return null
-  }
-
-  let repo_root = ($repo_root | path expand --no-symlink)
-  let repo_parent = ($repo_root | path dirname)
-  let repo_grandparent = ($repo_parent | path dirname)
-  let repo_dirs_segments = normalize-segments $repo_dirs_path
-  let direct_polyrepo_root = dirname-n (($repo_dirs_segments | length) + 1) $repo_root
-  let grouped_polyrepo_root = dirname-n (($repo_dirs_segments | length) + 2) $repo_root
-  let direct_candidate_repo_dirs_root = if ($repo_dirs_segments | is-empty) {
-    $direct_polyrepo_root
-  } else {
-    ($direct_polyrepo_root | path join $repo_dirs_path) | path expand --no-symlink
-  }
-  let grouped_candidate_repo_dirs_root = if ($repo_dirs_segments | is-empty) {
-    $grouped_polyrepo_root
-  } else {
-    ($grouped_polyrepo_root | path join $repo_dirs_path) | path expand --no-symlink
-  }
-
-  # Inference is valid when the current repo lives directly under the configured
-  # repo-dirs root, or one group-directory below it, e.g.
-  # `<polyrepo>/<repoDirsPath>/<repo>` or `<polyrepo>/<repoDirsPath>/<group>/<repo>`.
-  if $repo_parent == $direct_candidate_repo_dirs_root {
-    return $direct_polyrepo_root
-  }
-
-  if $repo_grandparent == $grouped_candidate_repo_dirs_root {
-    return $grouped_polyrepo_root
   }
 }
 
@@ -180,13 +120,7 @@ export def resolve-polyrepo-root [repo_root: path polyrepo_root: any repo_dirs_p
     return $manifest_root
   }
 
-  let inferred = infer-polyrepo-root $repo_root $repo_dirs_path
-
-  if ($inferred | describe) == 'nothing' {
-    fail $"polyrepo root could not be inferred; pass --polyrepo-root or place (polyrepo-manifest-basename) at the polyrepo root"
-  }
-
-  $inferred
+  fail $"polyrepo root could not be inferred; pass --polyrepo-root or place a manifest-owned repo entry for this repo in (polyrepo-manifest-basename)"
 }
 
 export def maybe-relativize [target_path: path root: path]: nothing -> oneof<path, nothing> {
@@ -201,31 +135,39 @@ export def maybe-relativize [target_path: path root: path]: nothing -> oneof<pat
   }
 }
 
-export def list-local-repo-paths [repo_dirs_root: path include_repos: list<string> exclude_repos: list<string>]: nothing -> record {
-  let repo_entries = if ($repo_dirs_root | path exists) { ls $repo_dirs_root } else { [] }
-  mut repo_roots = []
+export def list-local-repo-paths [polyrepo_root: path repo_dirs_root: path include_repos: list<string> exclude_repos: list<string>]: nothing -> record {
+  let manifest_path = (polyrepo-manifest-path $polyrepo_root)
 
-  for entry in ($repo_entries | where type == dir) {
-    let direct_path = ($entry | get name)
-
-    if (is-repo-root $direct_path) {
-      $repo_roots = ($repo_roots | append { name: ($direct_path | path basename), path: $direct_path })
-      continue
-    }
-
-    let nested_entries = if ($direct_path | path exists) { ls $direct_path } else { [] }
-
-    for nested_entry in ($nested_entries | where type == dir) {
-      let nested_path = ($nested_entry | get name)
-
-      if (is-repo-root $nested_path) {
-        $repo_roots = ($repo_roots | append { name: ($nested_path | path basename), path: $nested_path })
-      }
-    }
+  if not ($manifest_path | path exists) {
+    fail $"expected (polyrepo-manifest-basename) at ($polyrepo_root)"
   }
 
+  let manifest_label = $"polyrepo manifest '($manifest_path)'"
+  let manifest_text = open --raw $manifest_path
+  let declared_repo_roots = (
+    repo-paths-from-polyrepo-manifest $manifest_label $manifest_text
+    | each {|repo_path|
+        let resolved_path = resolve-repo-path $polyrepo_root $repo_path
+        let resolved_name = ($resolved_path | path basename)
+        let relative_path = maybe-relativize $resolved_path $repo_dirs_root
+
+        if (($relative_path | describe) == 'nothing') {
+          fail $"repo '($resolved_name)' at ($resolved_path) is outside repoDirsPath rooted at ($repo_dirs_root)"
+        }
+
+        if not (is-repo-root $resolved_path) {
+          fail $"repo '($resolved_name)' at ($resolved_path) is not a repo root"
+        }
+
+        {
+          name: $resolved_name
+          path: $resolved_path
+        }
+      }
+  )
+
   let filtered = (
-    $repo_roots
+    $declared_repo_roots
     | where {|repo|
         (($include_repos | is-empty) or ($repo.name in $include_repos)) and (not ($repo.name in $exclude_repos))
       }
@@ -251,10 +193,6 @@ export def list-local-repo-paths [repo_dirs_root: path include_repos: list<strin
   | sort-by name
   | each {|repo| [$repo.name (($repo.path | path expand --no-symlink) | into string)] }
   | into record
-}
-
-export def list-local-repo-names [repo_dirs_root: path include_repos: list<string> exclude_repos: list<string>]: nothing -> list<string> {
-  list-local-repo-paths $repo_dirs_root $include_repos $exclude_repos | columns | sort
 }
 
 export def load-repo-sources [local_repo_paths: record source_relative_path: any]: nothing -> record {
