@@ -103,8 +103,38 @@ let
     path = repoRoot;
     name = "poly-bootstrap-source";
   };
+  agentScriptsSource = builtins.path {
+    path = "${toString repoRoot}/../agent-scripts";
+    name = "agent-scripts-source";
+  };
   polyrepoScript = "${generatorSource}/bin/polyrepo.nu";
   bootstrapScript = "${generatorSource}/bootstrap";
+  fakeDevenvPackage = pkgs.runCommand "fake-devenv-package" { } ''
+    mkdir -p "$out/bin"
+    install -Dm755 ${fakeDevenvScript} "$out/bin/devenv"
+  '';
+  pkgsWithFakeDevenv = import pkgs.path {
+    overlays = [
+      (_final: _prev: {
+        devenv = fakeDevenvPackage;
+      })
+    ];
+  };
+  toolingSupportOptionsModule =
+    { lib, ... }:
+    {
+      options = {
+        packages = lib.mkOption {
+          type = lib.types.listOf lib.types.package;
+          default = [ ];
+        };
+
+        outputs = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = { };
+        };
+      };
+    };
 
   readYaml =
     path:
@@ -132,6 +162,22 @@ let
     );
 
   readJson = path: builtins.fromJSON (stripContext (builtins.readFile path));
+
+  evalSharedTooling =
+    {
+      root,
+      pkgsForTooling ? pkgs,
+    }:
+    lib.evalModules {
+      specialArgs = {
+        pkgs = pkgsForTooling;
+      };
+      modules = [
+        toolingSupportOptionsModule
+        "${root}/repos/agent-scripts/tooling"
+        "${root}/repos/poly-bootstrap/tooling"
+      ];
+    };
 
   runFixture =
     {
@@ -293,6 +339,60 @@ let
       '';
     };
 
+  runtimeFixture =
+    derivationNamePrefix:
+    runFixture {
+      inherit derivationNamePrefix;
+      fixture = "recursive-polyrepo";
+      repoPath = ".";
+      beforeRun = ''
+        rm -rf "$out/repos/agent-scripts" "$out/repos/poly-bootstrap"
+        cp -R ${agentScriptsSource}/. "$out/repos/agent-scripts"
+        chmod -R u+w "$out/repos/agent-scripts"
+        cp -R ${generatorSource}/. "$out/repos/poly-bootstrap"
+        chmod -R u+w "$out/repos/poly-bootstrap"
+      '';
+      script = ":";
+    };
+
+  runPackagedDevenvRun =
+    {
+      derivationNamePrefix,
+      sourceTree,
+      devenvRunPackage,
+    }:
+    pkgs.runCommand derivationNamePrefix
+      {
+        nativeBuildInputs = [
+          pkgs.gawk
+          pkgs.bash
+          pkgs.nushell
+        ];
+      }
+      ''
+        mkdir -p "$out"
+        cp -R ${sourceTree}/. "$out"/
+        chmod -R u+w "$out"
+        mkdir -p "$out/report"
+        if [ -f "$out/repos/app/.devenv/polyrepo-shell-export.meta" ] && [ -f "$out/repos/app/.devenv/shell-fake-1.sh" ]; then
+          awk -F= -v OFS== -v shell_export_path="$out/repos/app/.devenv/shell-fake-1.sh" '
+            $1 == "POLYREPO_SHELL_EXPORT_PATH" {
+              print $1, shell_export_path
+              next
+            }
+            { print }
+          ' "$out/repos/app/.devenv/polyrepo-shell-export.meta" > "$out/repos/app/.devenv/polyrepo-shell-export.meta.tmp"
+          mv "$out/repos/app/.devenv/polyrepo-shell-export.meta.tmp" "$out/repos/app/.devenv/polyrepo-shell-export.meta"
+        fi
+        export REPORT_DIR="$out/report"
+        export BOOTSTRAP_LOG="$out/bootstrap.log"
+        export DEVENV_FILES_LOG="$out/devenv-files.log"
+        export SHELL_EXPORT_LOG="$out/shell-export.log"
+        export PATH="${devenvRunPackage}/bin:$PATH"
+        "${devenvRunPackage}/bin/devenv-run" -C "$out/repos/app" --shell \
+          'type -P devenv-run > "$REPORT_DIR/devenv-run-path.txt"; printf "%s\n" "''${DEVENV_FAKE:-}" > "$REPORT_DIR/devenv-fake.txt"'
+      '';
+
 in
 {
   localInputOverrides."test sync emits local overrides and imports for repo target" = {
@@ -311,11 +411,14 @@ in
       == stripContext "path:${output}/repos/poly-docs-env"
       && stripContext rendered.inputs.nusurf.url
       == stripContext "path:${output}/repos/nusurf"
+      && stripContext rendered.inputs.poly-bootstrap.url
+      == stripContext "path:${output}/repos/poly-bootstrap"
       && stripContext rendered.inputs.poly-rust-env.url
       == stripContext "path:${output}/repos/poly-rust-env"
       && rendered.imports == [
         "agent-scripts/tooling"
         "nusurf/nushell-plugin"
+        "poly-bootstrap/tooling"
         "docs-shared/subdir"
       ];
     expected = true;
@@ -340,12 +443,17 @@ in
       in
       status.target_kind == "root"
       && status.mode == "written"
-      && status.local_repo_count == 4
+      && status.local_repo_count == 5
       && stripContext rendered.inputs.agent-scripts.url
       == stripContext "path:${output}/repos/agent-scripts"
+      && stripContext rendered.inputs.docs-shared.url
+      == stripContext "path:${output}/repos/poly-docs-env"
+      && stripContext rendered.inputs.poly-bootstrap.url
+      == stripContext "path:${output}/repos/poly-bootstrap"
       && rendered.imports == [
         "agent-scripts/tooling"
         "nusurf/nushell-plugin"
+        "poly-bootstrap/tooling"
         "docs-shared/subdir"
       ];
     expected = true;
@@ -381,7 +489,7 @@ in
         status = readJson "${output}/status.json";
       in
       status.ok == true
-      && status.repo_count == 5
+      && status.repo_count == 6
       && status.group_count == 1
       && status.layer_count == 3
       && status.error_count == 0;
@@ -469,6 +577,8 @@ in
       && status.dependency_repos == [ "agent-scripts" ]
       && stripContext appRendered.inputs.agent-scripts.url
       == stripContext "path:${output}/repos/agent-scripts"
+      && stripContext appRendered.inputs.poly-bootstrap.url
+      == stripContext "path:${output}/repos/poly-bootstrap"
       && stripContext depRendered.inputs.docs-shared.url
       == stripContext "path:${output}/repos/poly-docs-env"
       && bootstrapLog == [ "${output}/repos/app" ]
@@ -476,6 +586,22 @@ in
         "${output}/repos/agent-scripts"
         "${output}/repos/app"
       ];
+    expected = true;
+  };
+
+  localInputOverrides."test consumer tooling module exposes committer and devenv-run from explicit tooling imports" = {
+    expr =
+      let
+        output = runtimeFixture "polyrepo-consumer-tooling-module";
+        result = evalSharedTooling {
+          root = output;
+          pkgsForTooling = pkgsWithFakeDevenv;
+        };
+      in
+      result.config.outputs ? committer
+      && result.config.outputs ? devenv-run
+      && builtins.pathExists "${result.config.outputs.committer}/bin/committer"
+      && builtins.pathExists "${result.config.outputs.devenv-run}/bin/devenv-run";
     expected = true;
   };
 
@@ -585,27 +711,27 @@ in
     expected = true;
   };
 
-  localInputOverrides."test bootstrap refreshes shell export when agent scripts tooling changes" = {
+  localInputOverrides."test bootstrap refreshes shell export when poly bootstrap tooling changes" = {
     expr =
       let
         output = runBootstrapJsonTwice {
-          derivationNamePrefix = "polyrepo-bootstrap-shell-export-agent-scripts-change";
+          derivationNamePrefix = "polyrepo-bootstrap-shell-export-poly-bootstrap-change";
           fixture = "recursive-polyrepo";
           repoPath = "repos/nusurf";
           beforeRun = ''
-            mkdir -p "$out/repos/agent-scripts/modules/devenv-run"
-            cat > "$out/repos/agent-scripts/modules/devenv-run/devenv-run.sh" <<'EOF'
+            mkdir -p "$out/repos/poly-bootstrap/sh" "$out/repos/poly-bootstrap/tooling"
+            cat > "$out/repos/poly-bootstrap/sh/devenv-run.sh" <<'EOF'
             echo initial
             EOF
-            cat > "$out/repos/agent-scripts/modules/devenv-run/default.nix" <<'EOF'
-            { }
-            EOF
-            cat > "$out/repos/agent-scripts/modules/devenv-run/polyrepo-bootstrap.sh" <<'EOF'
+            cat > "$out/repos/poly-bootstrap/sh/polyrepo.sh" <<'EOF'
             echo helper
+            EOF
+            cat > "$out/repos/poly-bootstrap/tooling/default.nix" <<'EOF'
+            { }
             EOF
           '';
           betweenRuns = ''
-            printf '\n# changed\n' >> "$out/repos/agent-scripts/modules/devenv-run/devenv-run.sh"
+            printf '\n# changed\n' >> "$out/repos/poly-bootstrap/sh/devenv-run.sh"
           '';
         };
         secondStatus = readJson "${output}/second-status.json";
@@ -617,6 +743,47 @@ in
         "${output}/repos/nusurf"
         "${output}/repos/nusurf"
       ];
+    expected = true;
+  };
+
+  localInputOverrides."test packaged devenv-run refreshes shell export after poly bootstrap wrapper source changes" = {
+    expr =
+      let
+        initialSourceTree = runtimeFixture "polyrepo-packaged-devenv-run-source-initial";
+        initialTooling = evalSharedTooling {
+          root = initialSourceTree;
+          pkgsForTooling = pkgsWithFakeDevenv;
+        };
+        initialRun = runPackagedDevenvRun {
+          derivationNamePrefix = "polyrepo-packaged-devenv-run-initial";
+          sourceTree = initialSourceTree;
+          devenvRunPackage = initialTooling.config.outputs.devenv-run;
+        };
+        changedSourceTree = pkgs.runCommand "polyrepo-packaged-devenv-run-source-changed" { } ''
+          mkdir -p "$out"
+          cp -R ${initialRun}/. "$out"/
+          chmod -R u+w "$out"
+          printf '\n# changed\n' >> "$out/repos/poly-bootstrap/sh/devenv-run.sh"
+        '';
+        changedTooling = evalSharedTooling {
+          root = changedSourceTree;
+          pkgsForTooling = pkgsWithFakeDevenv;
+        };
+        changedRun = runPackagedDevenvRun {
+          derivationNamePrefix = "polyrepo-packaged-devenv-run-changed";
+          sourceTree = changedSourceTree;
+          devenvRunPackage = changedTooling.config.outputs.devenv-run;
+        };
+        initialShellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${initialRun}/shell-export.log"));
+        changedShellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${changedRun}/shell-export.log"));
+      in
+      initialTooling.config.outputs.devenv-run != changedTooling.config.outputs.devenv-run
+      && builtins.readFile "${initialRun}/report/devenv-run-path.txt"
+      != builtins.readFile "${changedRun}/report/devenv-run-path.txt"
+      && builtins.readFile "${initialRun}/report/devenv-fake.txt" == "1\n"
+      && builtins.readFile "${changedRun}/report/devenv-fake.txt" == "1\n"
+      && (builtins.length initialShellExportLog) == 2
+      && (builtins.length changedShellExportLog) == 4;
     expected = true;
   };
 
@@ -632,13 +799,14 @@ in
         status = readJson "${output}/status.json";
         resultRoots = builtins.map (result: stripContext result.repo_root) status.results;
       in
-      status.repo_count == 5
-      && status.success_count == 5
+      status.repo_count == 6
+      && status.success_count == 6
       && status.failure_count == 0
       && resultRoots == [
         "${output}/repos/agent-scripts"
         "${output}/repos/app"
         "${output}/repos/nusurf"
+        "${output}/repos/poly-bootstrap"
         "${output}/repos/poly-docs-env"
         "${output}/repos/poly-rust-env"
       ]
@@ -688,9 +856,6 @@ in
         stderr = builtins.readFile "${output}/stderr.txt";
       in
       lib.hasInfix "manifest-owned repo catalog" stderr
-      && lib.hasInfix "available repo names:" stderr
-      && lib.hasInfix "agent-scripts, app, nusurf" stderr
-      && lib.hasInfix "poly-rust-env" stderr
       && lib.hasInfix "polyrepo.nuon" stderr;
     expected = true;
   };

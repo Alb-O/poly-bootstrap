@@ -1,21 +1,26 @@
 # Poly Bootstrap
 
-External bootstrap/runtime tooling for this polyrepo.
+Polyrepo-specific bootstrap and runtime tooling for this workspace.
 
-`poly-bootstrap` no longer exposes a shared `devenv` module for consumer repos.
-Its job is to:
+Ownership:
+
+- `poly-bootstrap` owns bootstrap, root discovery, shell export reuse, `devenv-run`, and the `poly-bootstrap/tooling` consumer module.
+- `agent-scripts` owns only generic reusable tools such as `committer`.
+
+Responsibilities:
 
 - read `polyrepo.nuon`
 - generate `devenv.local.yaml` before `devenv` evaluation
 - bootstrap manifest-declared dependency repos
 - run manifest-declared bootstrap tasks such as `devenv:files`
 - refresh the target repo lock/export state when needed
+- package `devenv-run` for consumers via `poly-bootstrap/tooling`
 
 ## Public Interface
 
 - CLI: `bin/polyrepo.nu`
 - Wrapper entrypoint: `bootstrap`
-- Nushell module: `use nu/mod.nu [bootstrap bootstrap-all check sync]`
+- Consumer module: `tooling/default.nix`
 
 Commands:
 
@@ -27,6 +32,15 @@ nu bin/polyrepo.nu bootstrap . --all-repos
 ```
 
 Use `--json` with `check`, `sync`, or `bootstrap` for machine-readable status.
+
+Consumer imports are explicit:
+
+```nix
+imports = [
+  inputs.agent-scripts.tooling
+  inputs.poly-bootstrap.tooling
+];
+```
 
 ## Manifest Model
 
@@ -51,12 +65,13 @@ Key rules:
 - `devenv.local.yaml` must exist before `devenv` starts; bootstrap is the only supported writer.
 - `bootstrap --all-repos` targets only repos that expose `devenv.yaml` or `devenv.nix`.
 - The root workspace is first-class. `check .`, `sync .`, and `bootstrap .` work from the polyrepo root directly.
-- `devenv-run` and the direnv helper both call the same shared bootstrap function.
+- `.polyrepo-direnvrc` and `devenv-run` both source `sh/polyrepo.sh`.
+- `sh/devenv-run.sh` is the canonical command source packaged by `tooling/default.nix`.
 
 ## Testing
 
 Inside this repo:
 
 ```bash
-bash ../agent-scripts/modules/devenv-run/devenv-run.sh -C . --shell 'run-nix-tests'
+devenv-run -C . --shell 'run-nix-tests'
 ```

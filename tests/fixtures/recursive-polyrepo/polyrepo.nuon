@@ -26,6 +26,12 @@
       requiresInputs: [ "poly-rust-env" ]
       localRepo: "nusurf"
     }
+    poly-bootstrap: {
+      url: "github:Alb-O/poly-bootstrap"
+      flake: false
+      imports: [ "poly-bootstrap/tooling" ]
+      localRepo: "poly-bootstrap"
+    }
     poly-rust-env: {
       url: "github:Alb-O/poly-rust-env"
       flake: false
@@ -35,7 +41,7 @@
 
   layers: {
     shared-tooling: {
-      inputs: [ "agent-scripts" "nusurf" ]
+      inputs: [ "agent-scripts" "nusurf" "poly-bootstrap" ]
     }
     repo-empty: {
       extends: [ "shared-tooling" ]
@@ -50,6 +56,7 @@
     dependency-repos: {
       members: {
         nusurf: "repos/nusurf"
+        poly-bootstrap: "repos/poly-bootstrap"
         poly-docs-env: "repos/poly-docs-env"
         poly-rust-env: "repos/poly-rust-env"
       }

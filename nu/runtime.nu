@@ -957,11 +957,11 @@ def shell-export-fingerprint [repo_root: path]: nothing -> string {
       $lines = ($lines | append (shell-export-file-stat-line $"input:($input_entry.name):($rel_path)" ($input_entry.repo_root | path join $rel_path)))
     }
 
-    if $input_entry.name == "agent-scripts" {
+    if $input_entry.name == "poly-bootstrap" {
       for rel_path in [
-        "modules/devenv-run/devenv-run.sh"
-        "modules/devenv-run/default.nix"
-        "modules/devenv-run/polyrepo-bootstrap.sh"
+        "sh/devenv-run.sh"
+        "sh/polyrepo.sh"
+        "tooling/default.nix"
       ] {
         $lines = ($lines | append (shell-export-file-stat-line $"input:($input_entry.name):($rel_path)" ($input_entry.repo_root | path join $rel_path)))
       }
