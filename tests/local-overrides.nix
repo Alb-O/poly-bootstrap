@@ -24,6 +24,37 @@ let
 
         if (($args | length) > 0) and (($args | get 0) == "update") {
           $"(pwd)\n" | save --append --raw $env.BOOTSTRAP_LOG
+          let local_yaml_path = (pwd | path join "devenv.local.yaml")
+          let local_doc = if ($local_yaml_path | path exists) {
+            open --raw $local_yaml_path | from yaml | default {}
+          } else {
+            {}
+          }
+          let input_specs = ($local_doc | get -o inputs | default {})
+          let root_inputs = (
+            $input_specs
+            | columns
+            | each {|input_name| [$input_name $input_name] }
+            | into record
+          )
+          let input_nodes = (
+            $input_specs
+            | items {|input_name, input_spec|
+                [
+                  $input_name
+                  {
+                    original: ($input_spec | get -o url | default null)
+                  }
+                ]
+              }
+            | into record
+          )
+          {
+            root: "root"
+            nodes: (
+              ({ root: { inputs: $root_inputs } } | merge $input_nodes)
+            )
+          } | to json --raw | save --force (pwd | path join "devenv.lock")
           return
         }
 
@@ -42,18 +73,25 @@ let
           return
         }
 
-        if (($args | str join " ") == "shell --no-tui -- bash -lc true") {
-          if ("SHELL_EXPORT_LOG" in $env) {
+        if (($args | str join " ") == "shell --no-tui --no-eval-cache --refresh-eval-cache -- bash -lc true") {
+          let existing_calls = if ("SHELL_EXPORT_LOG" in $env) and ($env.SHELL_EXPORT_LOG | path exists) {
+              open --raw $env.SHELL_EXPORT_LOG | lines | where {|line| $line != "" } | length
+          } else {
+            0
+          }
+
+          if "SHELL_EXPORT_LOG" in $env {
             $"(pwd)\n" | save --append --raw $env.SHELL_EXPORT_LOG
           }
 
+          let export_index = ($existing_calls + 1)
           let shell_dir = (pwd | path join ".devenv")
           mkdir $shell_dir
           [
             "#!/usr/bin/env bash"
             "export DEVENV_FAKE=1"
             'eval "${shellHook:-}"'
-          ] | str join "\n" | save --force ($shell_dir | path join "shell-fake.sh")
+          ] | str join "\n" | save --force ($shell_dir | path join $"shell-fake-($export_index).sh")
           return
         }
 
@@ -230,6 +268,31 @@ let
         ${nu} ${polyrepoScript} bootstrap "$repo_path" --json $argsString > "$out/status.json"
       '';
     };
+
+  runBootstrapJsonTwice =
+    {
+      derivationNamePrefix,
+      fixture,
+      repoPath,
+      extraArgs ? [ ],
+      beforeRun ? "",
+      betweenRuns ? "",
+    }:
+    runFixture {
+      inherit derivationNamePrefix fixture repoPath extraArgs beforeRun;
+      script = ''
+        mkdir -p "$out/bin"
+        install -Dm755 ${fakeDevenvScript} "$out/bin/devenv"
+        export PATH="$out/bin:$PATH"
+        export BOOTSTRAP_LOG="$out/bootstrap.log"
+        export DEVENV_FILES_LOG="$out/devenv-files.log"
+        export SHELL_EXPORT_LOG="$out/shell-export.log"
+        ${nu} ${polyrepoScript} bootstrap "$repo_path" --json $argsString > "$out/first-status.json"
+        ${betweenRuns}
+        ${nu} ${polyrepoScript} bootstrap "$repo_path" --json $argsString > "$out/second-status.json"
+      '';
+    };
+
 in
 {
   localInputOverrides."test sync emits local overrides and imports for repo target" = {
@@ -416,18 +479,144 @@ in
     expected = true;
   };
 
-  localInputOverrides."test bootstrap materializes a shell export for the target repo" = {
+  localInputOverrides."test bootstrap materializes a shell export and metadata for the target repo" = {
     expr =
       let
-        output = runBootstrap {
-          derivationNamePrefix = "polyrepo-bootstrap-shell-export";
+        output = runBootstrapJson {
+          derivationNamePrefix = "polyrepo-bootstrap-shell-export-meta";
           fixture = "recursive-polyrepo";
           repoPath = "repos/app";
         };
+        status = readJson "${output}/status.json";
         shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
       in
-      builtins.pathExists "${output}/repos/app/.devenv/shell-fake.sh"
+      status.shell_export_refreshed == true
+      && status.shell_export_reason == "forced_refresh"
+      && builtins.pathExists "${output}/repos/app/.devenv/polyrepo-shell-export.meta"
       && shellExportLog == [ "${output}/repos/app" ];
+    expected = true;
+  };
+
+  localInputOverrides."test bootstrap reuses shell export when metadata matches" = {
+    expr =
+      let
+        output = runBootstrapJsonTwice {
+          derivationNamePrefix = "polyrepo-bootstrap-shell-export-reuse";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/nusurf";
+        };
+        secondStatus = readJson "${output}/second-status.json";
+        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+      in
+      secondStatus.shell_export_refreshed == false
+      && secondStatus.shell_export_reason == "reused"
+      && shellExportLog == [ "${output}/repos/nusurf" ];
+    expected = true;
+  };
+
+  localInputOverrides."test bootstrap refreshes shell export when metadata is missing" = {
+    expr =
+      let
+        output = runBootstrapJsonTwice {
+          derivationNamePrefix = "polyrepo-bootstrap-shell-export-missing-meta";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/nusurf";
+          betweenRuns = ''
+            rm "$out/repos/nusurf/.devenv/polyrepo-shell-export.meta"
+          '';
+        };
+        secondStatus = readJson "${output}/second-status.json";
+        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+      in
+      secondStatus.shell_export_refreshed == true
+      && secondStatus.shell_export_reason == "missing_meta"
+      && shellExportLog == [
+        "${output}/repos/nusurf"
+        "${output}/repos/nusurf"
+      ];
+    expected = true;
+  };
+
+  localInputOverrides."test bootstrap refreshes shell export when metadata is corrupt" = {
+    expr =
+      let
+        output = runBootstrapJsonTwice {
+          derivationNamePrefix = "polyrepo-bootstrap-shell-export-corrupt-meta";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/nusurf";
+          betweenRuns = ''
+            cat > "$out/repos/nusurf/.devenv/polyrepo-shell-export.meta" <<'EOF'
+            not-valid-metadata
+            EOF
+          '';
+        };
+        secondStatus = readJson "${output}/second-status.json";
+        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+      in
+      secondStatus.shell_export_refreshed == true
+      && secondStatus.shell_export_reason == "meta_parse_error"
+      && shellExportLog == [
+        "${output}/repos/nusurf"
+        "${output}/repos/nusurf"
+      ];
+    expected = true;
+  };
+
+  localInputOverrides."test bootstrap refreshes shell export when tracked repo files change" = {
+    expr =
+      let
+        output = runBootstrapJsonTwice {
+          derivationNamePrefix = "polyrepo-bootstrap-shell-export-target-change";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/nusurf";
+          betweenRuns = ''
+            printf '\n# refresh shell export fingerprint\n' >> "$out/repos/nusurf/devenv.yaml"
+          '';
+        };
+        secondStatus = readJson "${output}/second-status.json";
+        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+      in
+      secondStatus.shell_export_refreshed == true
+      && secondStatus.shell_export_reason == "stale_fingerprint"
+      && shellExportLog == [
+        "${output}/repos/nusurf"
+        "${output}/repos/nusurf"
+      ];
+    expected = true;
+  };
+
+  localInputOverrides."test bootstrap refreshes shell export when agent scripts tooling changes" = {
+    expr =
+      let
+        output = runBootstrapJsonTwice {
+          derivationNamePrefix = "polyrepo-bootstrap-shell-export-agent-scripts-change";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/nusurf";
+          beforeRun = ''
+            mkdir -p "$out/repos/agent-scripts/modules/devenv-run"
+            cat > "$out/repos/agent-scripts/modules/devenv-run/devenv-run.sh" <<'EOF'
+            echo initial
+            EOF
+            cat > "$out/repos/agent-scripts/modules/devenv-run/default.nix" <<'EOF'
+            { }
+            EOF
+            cat > "$out/repos/agent-scripts/modules/devenv-run/polyrepo-bootstrap.sh" <<'EOF'
+            echo helper
+            EOF
+          '';
+          betweenRuns = ''
+            printf '\n# changed\n' >> "$out/repos/agent-scripts/modules/devenv-run/devenv-run.sh"
+          '';
+        };
+        secondStatus = readJson "${output}/second-status.json";
+        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+      in
+      secondStatus.shell_export_refreshed == true
+      && secondStatus.shell_export_reason == "stale_fingerprint"
+      && shellExportLog == [
+        "${output}/repos/nusurf"
+        "${output}/repos/nusurf"
+      ];
     expected = true;
   };
 
