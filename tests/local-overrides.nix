@@ -19,7 +19,9 @@ let
     text = ''
       #!${nu}
 
-      def --wrapped main [...args: string] {
+      def --wrapped main [...raw_args] {
+        let args = ($raw_args | each {|arg| $arg | into string })
+
         if (($args | length) > 0) and (($args | get 0) == "update") {
           $"(pwd)\n" | save --append --raw $env.BOOTSTRAP_LOG
           return
@@ -37,6 +39,21 @@ let
             open --raw $spec_path | save --force $manifest_path
           }
 
+          return
+        }
+
+        if (($args | str join " ") == "shell --no-tui -- bash -lc true") {
+          if ("SHELL_EXPORT_LOG" in $env) {
+            $"(pwd)\n" | save --append --raw $env.SHELL_EXPORT_LOG
+          }
+
+          let shell_dir = (pwd | path join ".devenv")
+          mkdir $shell_dir
+          [
+            "#!/usr/bin/env bash"
+            "export DEVENV_FAKE=1"
+            'eval "${shellHook:-}"'
+          ] | str join "\n" | save --force ($shell_dir | path join "shell-fake.sh")
           return
         }
 
@@ -198,7 +215,29 @@ let
         export PATH="$out/bin:$PATH"
         export BOOTSTRAP_LOG="$out/bootstrap.log"
         export DEVENV_FILES_LOG="$out/devenv-files.log"
+        export SHELL_EXPORT_LOG="$out/shell-export.log"
         ${pkgs.bash}/bin/bash "${bootstrapScript}" "$repo_path" --polyrepo-root "$out" --repo-dirs-path repos
+      '';
+    };
+
+  runBootstrapJson =
+    {
+      derivationNamePrefix,
+      fixture,
+      repoPath,
+      extraArgs ? [ ],
+      beforeRun ? "",
+    }:
+    runFixture {
+      inherit derivationNamePrefix fixture repoPath extraArgs beforeRun;
+      script = ''
+        mkdir -p "$out/bin"
+        install -Dm755 ${fakeDevenvScript} "$out/bin/devenv"
+        export PATH="$out/bin:$PATH"
+        export BOOTSTRAP_LOG="$out/bootstrap.log"
+        export DEVENV_FILES_LOG="$out/devenv-files.log"
+        export SHELL_EXPORT_LOG="$out/shell-export.log"
+        ${pkgs.bash}/bin/bash "${bootstrapScript}" --json "$repo_path" --polyrepo-root "$out" --repo-dirs-path repos $argsString > "$out/status.json"
       '';
     };
 
@@ -512,6 +551,46 @@ in
       && stripContext depRendered.inputs.docs-shared.url
       == stripContext "path:${output}/repos/poly-docs-env"
       && bootstrapLog == [ "${output}/repos/app" ];
+    expected = true;
+  };
+
+  localInputOverrides."test bootstrap materializes a shell export for the root repo" = {
+    expr =
+      let
+        output = runBootstrap {
+          derivationNamePrefix = "local-overrides-bootstrap-shell-export";
+          fixture = "recursive-polyrepo";
+          repoPath = "repos/app";
+        };
+        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+      in
+      builtins.pathExists "${output}/repos/app/.devenv/shell-fake.sh"
+      && shellExportLog == [ "${output}/repos/app" ];
+    expected = true;
+  };
+
+  localInputOverrides."test bootstrap all emits per-repo json summary" = {
+    expr =
+      let
+        output = runBootstrapJson {
+          derivationNamePrefix = "local-overrides-bootstrap-all-json";
+          fixture = "recursive-polyrepo";
+          repoPath = ".";
+          extraArgs = [ "--all-repos" ];
+        };
+        status = readJson "${output}/status.json";
+        resultRoots = builtins.map (result: stripContext result.repo_root) status.results;
+      in
+      status.repo_count == 4
+      && status.success_count == 4
+      && status.failure_count == 0
+      && resultRoots == [
+        "${output}/repos/agent-scripts"
+        "${output}/repos/app"
+        "${output}/repos/nusurf"
+        "${output}/repos/poly-docs-env"
+      ]
+      && lib.all (result: result.ok == true && result.status.shell_export_refreshed == true) status.results;
     expected = true;
   };
 

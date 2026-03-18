@@ -236,6 +236,58 @@ def refresh-generated-files [repo_root: path]: nothing -> nothing {
   }
 }
 
+def latest-shell-export [repo_root: path]: nothing -> oneof<path, nothing> {
+  let shell_glob = ((resolve-repo-path $repo_root ".devenv") | path join "shell-*.sh")
+  let shell_exports = (
+    glob $shell_glob
+    | each {|path|
+        let entry = (ls $path | first)
+        {
+          path: $path
+          modified: $entry.modified
+        }
+      }
+    | sort-by modified
+  )
+
+  if ($shell_exports | is-empty) {
+    return
+  }
+
+  $shell_exports | last | get path
+}
+
+def materialize-shell-export [repo_root: path]: nothing -> nothing {
+  do {
+    cd $repo_root
+    ^devenv shell --no-tui -- bash -lc "true" | ignore
+  }
+}
+
+def ensure-shell-export [repo_root: path refresh_requested: bool]: nothing -> record {
+  let existing_export = (latest-shell-export $repo_root)
+
+  if (($existing_export | describe) == 'string') and (not $refresh_requested) {
+    return {
+      shell_export_path: $existing_export
+      shell_export_refreshed: false
+    }
+  }
+
+  materialize-shell-export $repo_root
+
+  let refreshed_export = (latest-shell-export $repo_root)
+
+  if (($refreshed_export | describe) != 'string') {
+    fail $"expected devenv shell export under (($repo_root | path expand --no-symlink) | path join '.devenv')"
+  }
+
+  {
+    shell_export_path: $refreshed_export
+    shell_export_refreshed: true
+  }
+}
+
 def bootstrap-recursive [spec: record root_repo_root: path repo_root: path visited_roots: list<string>]: nothing -> record {
   let normalized_repo_root = ($repo_root | path expand --no-symlink)
   let root_repo_root = ($root_repo_root | path expand --no-symlink)
@@ -269,6 +321,7 @@ def bootstrap-recursive [spec: record root_repo_root: path repo_root: path visit
     status: $root_status
     visited_roots: $visited_roots
   }
+  mut generated_files_refreshed = false
 
   for dependency_repo_root in $dependency_repo_roots {
     if $dependency_repo_root == $normalized_repo_root {
@@ -280,6 +333,7 @@ def bootstrap-recursive [spec: record root_repo_root: path repo_root: path visit
 
   if (managed-cargo-refresh-needed $normalized_repo_root) {
     refresh-generated-files $normalized_repo_root
+    $generated_files_refreshed = true
   }
 
   if ($normalized_repo_root == $root_repo_root) and (sync-needs-refresh $root_status) {
@@ -289,10 +343,39 @@ def bootstrap-recursive [spec: record root_repo_root: path repo_root: path visit
     }
   }
 
+  let shell_export_status = if $normalized_repo_root == $root_repo_root {
+    # Dependents only need their local overrides and generated files refreshed.
+    # The caller is the only repo that needs a guaranteed reusable shell export.
+    ensure-shell-export $normalized_repo_root ($generated_files_refreshed or (sync-needs-refresh $root_status))
+  } else {
+    {
+      shell_export_path: null
+      shell_export_refreshed: false
+    }
+  }
+
   {
-    status: $root_status
+    status: (
+      $root_status
+      | merge {
+          generated_files_refreshed: $generated_files_refreshed
+        }
+      | merge $shell_export_status
+    )
     visited_roots: $recursion_state.visited_roots
   }
+}
+
+def bootstrap-target-repo-roots [spec: record]: nothing -> list<path> {
+  let spec = normalize-sync-spec $spec
+  let repo_root = ($spec.repo_root | path expand --no-symlink)
+  let polyrepo_root = resolve-polyrepo-root $repo_root $spec.polyrepo_root $spec.repo_dirs_path
+  let repo_dirs_root = resolve-repo-dirs-root $polyrepo_root $spec.repo_dirs_path
+
+  list-local-repo-paths $repo_dirs_root [] []
+  | values
+  | each {|path| $path | path expand --no-symlink }
+  | sort
 }
 
 export def render-local-overrides [spec: record]: nothing -> string {
@@ -369,6 +452,51 @@ export def bootstrap [spec: record]: nothing -> record {
   let repo_root = ($spec.repo_root | path expand --no-symlink)
 
   (bootstrap-recursive $spec $repo_root $repo_root []).status
+}
+
+export def bootstrap-all [spec: record]: nothing -> record {
+  let spec = normalize-sync-spec $spec
+  let repo_roots = bootstrap-target-repo-roots $spec
+  let results = (
+    $repo_roots
+    | each {|repo_root|
+        try {
+          {
+            repo_root: $repo_root
+            ok: true
+            status: (bootstrap ($spec | merge { repo_root: $repo_root }))
+            error: null
+          }
+        } catch {|err|
+          {
+            repo_root: $repo_root
+            ok: false
+            status: null
+            error: $err.msg
+          }
+        }
+      }
+  )
+  let failures = ($results | where ok == false)
+
+  let summary = {
+    repo_count: ($repo_roots | length)
+    success_count: ($results | where ok == true | length)
+    failure_count: ($failures | length)
+    results: $results
+  }
+
+  if not ($failures | is-empty) {
+    error make {
+      # Callers such as `bin/bootstrap-repo.nu --json` re-emit this structured
+      # payload so automation can inspect partial successes before exiting.
+      msg: $"bootstrap failed for ($summary.failure_count) repos"
+      results: $results
+      summary: $summary
+    }
+  }
+
+  $summary
 }
 
 export def render-manifest-file [manifest_path: path]: nothing -> string {

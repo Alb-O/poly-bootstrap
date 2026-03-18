@@ -44,6 +44,8 @@ devenv shell --no-tui -- bash -lc 'run-nix-tests'
 - Recursive scanning reuses the same `sourcePath` inside each local repo.
 - That works best with the default `devenv.yaml`, or another repo-relative path
   shared across the repos in your polyrepo.
+- Nested imports such as `repo-name/subdir` resolve to a real module path inside
+  the input repo. They do not refer to an `outputs.<name>` attr.
 - If `${polyrepoRoot}/.devenv-global-inputs.yaml` exists, its `inputs` are
   treated as low-precedence defaults for every generated `devenv.local.yaml`.
 - `devenv.local.yaml` must exist before `devenv` starts. `devenv` loads local
@@ -68,6 +70,9 @@ use devenv
   inputs and the current lockfile root inputs drift, even if `devenv.local.yaml`
   itself did not change. It now decides that from `sync --json` status instead
   of reparsing CLI text output.
+- `bootstrap` now also ensures a `.devenv/shell-*.sh` export exists for the
+  root repo, so first-run workflows can materialize a usable shell export before
+  `devenv-run` tries to reuse it.
 - `bootstrap` now recursively bootstraps discovered local dependency
   repos before updating the current repo, so cross-repo `A -> B -> C` chains do
   not require users to pre-enter `B` or `C` with `direnv` first.
@@ -103,6 +108,16 @@ When the current repo already lives under `${polyrepoRoot}/${repoDirsPath}/...`,
 or one grouping directory below it, `polyrepoRoot` can usually be omitted and inferred. Top-level polyrepo configs
 should set it explicitly.
 
+## Which Command To Use
+
+- `bootstrap`: first-run or repair path. Use this when local overrides, lock
+  inputs, generated files, or shell exports may be stale or missing.
+- `devenv-run`: reuse path. Use this for normal command execution after the repo
+  has a generated shell export. It can self-heal on first use, but steady-state
+  runs stay lighter because they reuse the export instead of entering the shell.
+- `devenv shell --no-tui -- bash -lc '<cmd>'`: full shell path. Use this when
+  you intentionally want shell tasks and hooks to run.
+
 ## CLI
 
 Normal repo update:
@@ -117,10 +132,23 @@ Bootstrap a repo before `devenv` starts:
 nu bin/bootstrap-repo.nu .
 ```
 
+Bootstrap every discovered repo under `repoDirsPath`:
+
+```bash
+nu bin/bootstrap-repo.nu --all-repos --polyrepo-root /path/to/polyrepo
+```
+
 Structured status for automation:
 
 ```bash
 nu bin/local-overrides.nu sync --json .
+```
+
+Structured bootstrap status for one repo or all repos:
+
+```bash
+nu bin/bootstrap-repo.nu --json .
+nu bin/bootstrap-repo.nu --all-repos --json --polyrepo-root /path/to/polyrepo
 ```
 
 Machine render from one manifest file:
@@ -179,4 +207,11 @@ Rules:
 - global defaults still participate in local-path resolution
 - transitive scanning also applies to matching global defaults
 - shared imports are only emitted when the input exists after merging
-- nested imports such as `repo-name/subdir` are supported and are matched against the base input name
+- nested imports such as `repo-name/subdir` are supported, matched against the base input name, and resolved as real module paths inside the input repo
+
+## Shared Module Rule
+
+Shared devenv modules should resolve required cross-repo build inputs through
+`inputs`, not sibling checkout path assumptions. `nusurf/nushell-plugin` is the
+reference example: it imports `poly-rust-env` through `inputs.poly-rust-env`
+instead of assuming a neighboring checkout path exists at evaluation time.
