@@ -15,8 +15,9 @@ use sources.nu [
   expect-string-record
   parse-json-record
   parse-top-level-mapping
+  render-shared-inputs-yaml
 ]
-use support.nu [fail fail-on-overlap global-inputs-basename]
+use support.nu [fail fail-on-overlap polyrepo-manifest-basename]
 
 def require-string [value: any field_label: string]: nothing -> oneof<string, error> {
   if (($value | describe) != 'string') {
@@ -41,7 +42,12 @@ def validate-url-scheme [url_scheme: string]: nothing -> oneof<nothing, error> {
 }
 
 def render-normalized-overrides [spec: record]: nothing -> string {
-  let rendered = build-overrides $spec.source_yaml_text $spec.global_inputs_yaml_text $spec.local_repo_names $spec.local_repo_paths $spec.repo_sources $spec.include_inputs $spec.exclude_inputs $spec.repo_dirs_root $spec.url_scheme
+  let shared_inputs_yaml_text = if ($spec.polyrepo_manifest_text | str trim) != "" {
+    render-shared-inputs-yaml $"polyrepo manifest '((polyrepo-manifest-basename))'" $spec.polyrepo_manifest_text
+  } else {
+    ""
+  }
+  let rendered = build-overrides $spec.source_yaml_text $shared_inputs_yaml_text $spec.local_repo_names $spec.local_repo_paths $spec.repo_sources $spec.include_inputs $spec.exclude_inputs $spec.repo_dirs_root $spec.url_scheme
   render-overrides-text $rendered.overrides $rendered.imports
 }
 
@@ -50,7 +56,7 @@ def normalize-render-spec [spec: record]: nothing -> record {
   # fields once here and keep the renderer itself on a fully normalized shape.
   let spec = (
     {
-      global_inputs_yaml_text: ""
+      polyrepo_manifest_text: ""
       local_repo_names: []
       local_repo_paths: {}
       repo_sources: {}
@@ -61,7 +67,7 @@ def normalize-render-spec [spec: record]: nothing -> record {
   )
 
   let source_yaml_text = require-string ($spec | get -o source_yaml_text) "source_yaml_text"
-  let global_inputs_yaml_text = require-string ($spec | get -o global_inputs_yaml_text) "global_inputs_yaml_text"
+  let polyrepo_manifest_text = require-string ($spec | get -o polyrepo_manifest_text | default "") "polyrepo_manifest_text"
   let local_repo_names = expect-string-list ($spec | get -o local_repo_names | default []) "local_repo_names"
   let local_repo_paths = expect-string-record ($spec | get -o local_repo_paths | default {}) "local_repo_paths"
   let repo_sources = expect-string-record ($spec | get -o repo_sources | default {}) "repo_sources"
@@ -75,7 +81,7 @@ def normalize-render-spec [spec: record]: nothing -> record {
 
   {
     source_yaml_text: $source_yaml_text
-    global_inputs_yaml_text: $global_inputs_yaml_text
+    polyrepo_manifest_text: $polyrepo_manifest_text
     local_repo_names: $local_repo_names
     local_repo_paths: $local_repo_paths
     repo_sources: $repo_sources
@@ -392,9 +398,9 @@ export def sync-local-overrides [spec: record]: nothing -> record {
   let repo_dirs_root = resolve-repo-dirs-root $polyrepo_root $spec.repo_dirs_path
 
   let source_yaml_text = open --raw $source_yaml_path
-  let global_inputs_yaml_path = ($polyrepo_root | path join (global-inputs-basename))
-  let global_inputs_yaml_text = if ($global_inputs_yaml_path | path exists) {
-    open --raw $global_inputs_yaml_path
+  let polyrepo_manifest_path = ($polyrepo_root | path join (polyrepo-manifest-basename))
+  let polyrepo_manifest_text = if ($polyrepo_manifest_path | path exists) {
+    open --raw $polyrepo_manifest_path
   } else {
     ""
   }
@@ -405,7 +411,12 @@ export def sync-local-overrides [spec: record]: nothing -> record {
   let local_repo_paths = list-local-repo-paths $repo_dirs_root $spec.include_repos $spec.exclude_repos
   let repo_names = ($local_repo_paths | columns | sort)
   let repo_sources = load-repo-sources $local_repo_paths $source_relative_path
-  let rendered = build-overrides $source_yaml_text $global_inputs_yaml_text $repo_names $local_repo_paths $repo_sources $spec.include_inputs $spec.exclude_inputs $repo_dirs_root $spec.url_scheme
+  let shared_inputs_yaml_text = if ($polyrepo_manifest_text | str trim) != "" {
+    render-shared-inputs-yaml $"polyrepo manifest '((polyrepo-manifest-basename))'" $polyrepo_manifest_text
+  } else {
+    ""
+  }
+  let rendered = build-overrides $source_yaml_text $shared_inputs_yaml_text $repo_names $local_repo_paths $repo_sources $spec.include_inputs $spec.exclude_inputs $repo_dirs_root $spec.url_scheme
   let overrides_text = render-overrides-text $rendered.overrides $rendered.imports
   let local_repo_roots = (
     $rendered.local_repo_names

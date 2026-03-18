@@ -11,7 +11,7 @@ in
 (
   {
     cfg,
-    globalInputsText,
+    polyrepoManifestText,
     repoDirsRoot,
     repoNames,
     repoPaths,
@@ -27,7 +27,7 @@ in
         # positional payload files.
         manifestJson = builtins.toJSON {
           source_yaml_text = builtins.readFile sourcePath;
-          global_inputs_yaml_text = globalInputsText;
+          polyrepo_manifest_text = polyrepoManifestText;
           local_repo_names = repoNames;
           local_repo_paths = repoPaths;
           repo_sources = repoSources;

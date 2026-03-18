@@ -1,6 +1,6 @@
 use paths.nu [get-import-input-name repo-name-from-url]
 use sources.nu [get-imports-list get-input-names get-inputs-block read-input-spec]
-use support.nu [fail global-inputs-basename sort-record]
+use support.nu [fail polyrepo-manifest-basename sort-record]
 
 def override-url-prefix [url_scheme: string]: nothing -> oneof<string, error> {
   match $url_scheme {
@@ -49,7 +49,7 @@ def collect-global-imports [global_imports: list<string> include_inputs: list<st
 
 export def build-overrides [
   source_yaml_text: string
-  global_inputs_yaml_text: string
+  shared_inputs_yaml_text: string
   local_repo_names: list<string>
   local_repo_paths: record
   repo_sources: record
@@ -60,12 +60,12 @@ export def build-overrides [
 ]: nothing -> record {
   let url_prefix = override-url-prefix $url_scheme
   let root_input_names = get-input-names "root source" $source_yaml_text
-  let has_global_inputs = ($global_inputs_yaml_text | str trim) != ""
-  let global_inputs_label = $"global inputs '((global-inputs-basename))'"
-  let global_imports = if not $has_global_inputs {
+  let has_shared_inputs = ($shared_inputs_yaml_text | str trim) != ""
+  let shared_inputs_label = $"polyrepo shared inputs '((polyrepo-manifest-basename))'"
+  let shared_imports = if not $has_shared_inputs {
     []
   } else {
-    get-imports-list $global_inputs_label $global_inputs_yaml_text
+    get-imports-list $shared_inputs_label $shared_inputs_yaml_text
   }
 
   mut overrides = {}
@@ -79,12 +79,12 @@ export def build-overrides [
   ]
   mut visited_repo_names = []
 
-  if $has_global_inputs {
+  if $has_shared_inputs {
     $pending_sources = (
       $pending_sources
       | append {
-          source_label: $global_inputs_label
-          yaml_text: $global_inputs_yaml_text
+          source_label: $shared_inputs_label
+          yaml_text: $shared_inputs_yaml_text
           blocked_input_names: $root_input_names
         }
     )
@@ -156,7 +156,7 @@ export def build-overrides [
 
   {
     overrides: $overrides
-    imports: (collect-global-imports $global_imports $include_inputs $exclude_inputs $effective_input_names)
+    imports: (collect-global-imports $shared_imports $include_inputs $exclude_inputs $effective_input_names)
     local_repo_names: ($local_repo_names_used | uniq | sort)
   }
 }

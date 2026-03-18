@@ -60,7 +60,7 @@ let
     else if repoDirsSegments == [ ]
     then polyrepoRoot
     else "${polyrepoRoot}/${cfg.repoDirsPath}";
-  globalInputsPath = "${polyrepoRoot}/.devenv-global-inputs.yaml";
+  polyrepoManifestPath = "${polyrepoRoot}/polyrepo.nuon";
   sourcePath =
     if lib.hasPrefix "/" cfg.sourcePath
     then cfg.sourcePath
@@ -151,9 +151,9 @@ let
   );
 in
 {
-  inherit globalInputsPath polyrepoRoot repoDirsRoot repoNames repoPaths repoSources sourcePath;
-  globalInputsText =
-    if builtins.pathExists globalInputsPath
-    then builtins.readFile globalInputsPath
+  inherit polyrepoManifestPath polyrepoRoot repoDirsRoot repoNames repoPaths repoSources sourcePath;
+  polyrepoManifestText =
+    if builtins.pathExists polyrepoManifestPath
+    then builtins.readFile polyrepoManifestPath
     else "";
 }

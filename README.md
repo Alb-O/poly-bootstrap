@@ -46,8 +46,9 @@ devenv shell --no-tui -- bash -lc 'run-nix-tests'
   shared across the repos in your polyrepo.
 - Nested imports such as `repo-name/subdir` resolve to a real module path inside
   the input repo. They do not refer to an `outputs.<name>` attr.
-- If `${polyrepoRoot}/.devenv-global-inputs.yaml` exists, its `inputs` are
-  treated as low-precedence defaults for every generated `devenv.local.yaml`.
+- If `${polyrepoRoot}/polyrepo.nuon` exists, `sharedInputs` and
+  `sharedImports` are treated as the shared defaults for every generated
+  `devenv.local.yaml`.
 - `devenv.local.yaml` must exist before `devenv` starts. `devenv` loads local
   YAML during config/bootstrap, while this module runs later during Nix module
   evaluation. So the module can keep the file in sync, but it cannot bootstrap
@@ -162,7 +163,7 @@ Manifest shape:
 ```json
 {
   "source_yaml_text": "inputs: {}",
-  "global_inputs_yaml_text": "",
+  "polyrepo_manifest_text": "{ sharedInputs: {} }",
   "local_repo_names": ["agent-scripts"],
   "repo_sources": {
     "agent-scripts": "inputs: {}"
@@ -180,32 +181,37 @@ Supported Nushell module:
 use nu/mod.nu [bootstrap render-local-overrides sync-local-overrides lock-status]
 ```
 
-## Global Defaults
+## Polyrepo Manifest
 
-Create `${polyrepoRoot}/.devenv-global-inputs.yaml` to define shared defaults
-once for the whole polyrepo:
+Create `${polyrepoRoot}/polyrepo.nuon` to define shared defaults once for the
+whole polyrepo:
 
-```yaml
-inputs:
-  agent-scripts:
-    url: github:Alb-O/agent-scripts
-    flake: false
-  nusurf:
-    url: github:Alb-O/nusurf
-    flake: false
-  poly-docs-env:
-    url: github:Alb-O/poly-docs-env
-    flake: false
-imports:
-  - agent-scripts
-  - nusurf/nushell-plugin
+```nuon
+{
+  sharedInputs: {
+    agent-scripts: {
+      url: "github:Alb-O/agent-scripts"
+      flake: false
+      imports: [ "agent-scripts" ]
+    }
+    nusurf: {
+      url: "github:Alb-O/nusurf"
+      flake: false
+      imports: [ "nusurf/nushell-plugin" ]
+    }
+  }
+}
 ```
+
+Each `sharedInputs.<name>` entry accepts the normal input spec fields plus an
+optional `imports` list. `sharedImports` can be used for imports that are not
+attached to one specific shared input.
 
 Rules:
 
 - consumer-declared inputs in `devenv.yaml` win on name collisions
-- global defaults still participate in local-path resolution
-- transitive scanning also applies to matching global defaults
+- shared polyrepo defaults still participate in local-path resolution
+- transitive scanning also applies to matching shared polyrepo defaults
 - shared imports are only emitted when the input exists after merging
 - nested imports such as `repo-name/subdir` are supported, matched against the base input name, and resolved as real module paths inside the input repo
 

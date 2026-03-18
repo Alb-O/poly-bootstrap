@@ -401,7 +401,48 @@ in
             derivationNamePrefix = "local-overrides-render-manifest";
             manifest = {
               source_yaml_text = builtins.readFile "${fixture}/repos/app/devenv.yaml";
-              global_inputs_yaml_text = builtins.readFile "${fixture}/.devenv-global-inputs.yaml";
+              polyrepo_manifest_text = builtins.readFile "${fixture}/polyrepo.nuon";
+              local_repo_names = [
+                "agent-scripts"
+                "nusurf"
+                "poly-docs-env"
+              ];
+              local_repo_paths = { };
+              repo_sources = {
+                agent-scripts = builtins.readFile "${fixture}/repos/agent-scripts/devenv.yaml";
+                nusurf = builtins.readFile "${fixture}/repos/nusurf/devenv.yaml";
+                poly-docs-env = builtins.readFile "${fixture}/repos/poly-docs-env/devenv.yaml";
+              };
+              include_inputs = [ ];
+              exclude_inputs = [ ];
+              repo_dirs_root = "${fixture}/repos";
+              url_scheme = "path";
+            };
+          }
+        );
+      in
+      stripContext rendered.inputs.agent-scripts.url
+      == stripContext "path:${fixturePath "recursive-polyrepo"}/repos/agent-scripts"
+      && stripContext rendered.inputs.docs-shared.url
+      == stripContext "path:${fixturePath "recursive-polyrepo"}/repos/poly-docs-env"
+      && rendered.imports == [
+        "docs-shared/subdir"
+        "agent-scripts/tooling"
+        "nusurf/nushell-plugin"
+      ];
+    expected = true;
+  };
+
+  localInputOverrides."test render-manifest accepts polyrepo manifest text" = {
+    expr =
+      let
+        fixture = fixturePath "recursive-polyrepo";
+        rendered = readYaml (
+          runRenderManifest {
+            derivationNamePrefix = "local-overrides-render-manifest-polyrepo";
+            manifest = {
+              source_yaml_text = builtins.readFile "${fixture}/repos/app/devenv.yaml";
+              polyrepo_manifest_text = builtins.readFile "${fixture}/polyrepo.nuon";
               local_repo_names = [
                 "agent-scripts"
                 "nusurf"

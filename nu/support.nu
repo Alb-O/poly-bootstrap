@@ -2,8 +2,8 @@ export def fail [message: string]: nothing -> error {
   error make --unspanned $message
 }
 
-export def global-inputs-basename []: nothing -> string {
-  ".devenv-global-inputs.yaml"
+export def polyrepo-manifest-basename []: nothing -> string {
+  "polyrepo.nuon"
 }
 
 export def fail-on-overlap [first_names: list<string> second_names: list<string> first_label: string second_label: string]: nothing -> oneof<nothing, error> {
