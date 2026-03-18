@@ -18,20 +18,36 @@ let
       throw "polyrepo.nuon must define repoDirsPath as a single-line string field"
     else
       builtins.elemAt (builtins.head matches) 0;
-  readManifestRepoPaths =
+  readManifestRepoEntries =
     manifestPath:
     let
       manifestText = builtins.readFile manifestPath;
       lines = lib.splitString "\n" manifestText;
+      # Nix only needs repoDirsPath plus repo names/paths during early module
+      # evaluation, so keep this parser intentionally shallow instead of trying
+      # to fully evaluate NUON here.
       step =
         state: line:
         if !state.inRepos then
-          if builtins.match "^[[:space:]]*repos[[:space:]]*:[[:space:]]*\\[[[:space:]]*$" line != null then
+          if builtins.match "^[[:space:]]*repos[[:space:]]*:[[:space:]]*\\{[[:space:]]*$" line != null then
             state // { inRepos = true; }
           else
             state
-        else if builtins.match "^[[:space:]]*][[:space:]]*$" line != null then
-          state // { inRepos = false; completed = true; }
+        else if state.currentRepo == null then
+          if builtins.match "^[[:space:]]*}[[:space:]]*$" line != null then
+            state // { inRepos = false; completed = true; }
+          else if builtins.match "^[[:space:]]*$" line != null then
+            state
+          else
+            let
+              repoMatch = builtins.match "^[[:space:]]*([^[:space:]:][^:]*)[[:space:]]*:[[:space:]]*\\{[[:space:]]*$" line;
+            in
+            if repoMatch != null then
+              state // { currentRepo = builtins.elemAt repoMatch 0; }
+            else
+              state
+        else if builtins.match "^[[:space:]]*}[[:space:]]*$" line != null then
+          state // { currentRepo = null; }
         else if builtins.match "^[[:space:]]*$" line != null then
           state
         else
@@ -39,15 +55,22 @@ let
             entryMatch = builtins.match "^[[:space:]]*path[[:space:]]*:[[:space:]]*\"([^\"]+)\"[[:space:]]*$" line;
           in
           if entryMatch != null then
-            state // { paths = state.paths ++ [ (builtins.elemAt entryMatch 0) ]; }
+            state // {
+              entries = state.entries ++ [
+                {
+                  name = state.currentRepo;
+                  path = builtins.elemAt entryMatch 0;
+                }
+              ];
+            }
           else
             state;
-      result = lib.foldl' step { inRepos = false; completed = false; paths = [ ]; } lines;
+      result = lib.foldl' step { inRepos = false; currentRepo = null; completed = false; entries = [ ]; } lines;
     in
     if !result.completed then
-      throw "polyrepo.nuon must define repos as a multiline list"
+      throw "polyrepo.nuon must define repos as a multiline mapping"
     else
-      result.paths;
+      result.entries;
   findPolyrepoRoot =
     repoRoot:
     let
@@ -59,9 +82,12 @@ let
           candidateRepoPaths =
             if builtins.pathExists manifestPath then
               map (
-                repoPath:
+                repoEntry:
+                let
+                  repoPath = repoEntry.path;
+                in
                 if lib.hasPrefix "/" repoPath then repoPath else "${candidate}/${repoPath}"
-              ) (readManifestRepoPaths manifestPath)
+              ) (readManifestRepoEntries manifestPath)
             else
               [ ];
           matchesCandidate = builtins.elem repoRoot candidateRepoPaths;
@@ -114,8 +140,9 @@ let
   polyrepoManifestPath = "${polyrepoRoot}/polyrepo.nuon";
   declaredRepoRoots =
     map (
-      repoPath:
+      repoEntry:
       let
+        repoPath = repoEntry.path;
         resolvedPath = if lib.hasPrefix "/" repoPath then repoPath else "${polyrepoRoot}/${repoPath}";
         relativePath =
           if lib.hasPrefix "/" repoDirsPath then
@@ -131,27 +158,16 @@ let
         throw "polyrepo.nuon repos entries must point at repo roots"
       else
         {
-          name = baseNameOf resolvedPath;
+          name = repoEntry.name;
           path = resolvedPath;
         }
-    ) (readManifestRepoPaths polyrepoManifestPath);
+    ) (readManifestRepoEntries polyrepoManifestPath);
   filteredRepoRoots = lib.filter (
     repo:
     (includeRepos == [ ] || builtins.elem repo.name includeRepos)
     && !(builtins.elem repo.name excludeRepos)
   ) declaredRepoRoots;
-  duplicateRepoNames =
-    lib.filter (repoName: (lib.length (lib.filter (repo: repo.name == repoName) filteredRepoRoots)) > 1)
-      (lib.unique (map (repo: repo.name) filteredRepoRoots));
-  _checkDuplicateRepoNames =
-    if duplicateRepoNames == [ ] then
-      null
-    else
-      throw "multiple local repos share the same basename under the effective repoDirsPath: ${lib.concatStringsSep ", " duplicateRepoNames}";
   repoPathPairs =
-    let
-      _ = _checkDuplicateRepoNames;
-    in
     map (repo: lib.nameValuePair repo.name repo.path) filteredRepoRoots;
   repoPaths = builtins.listToAttrs repoPathPairs;
   repoNames = lib.sort builtins.lessThan (builtins.attrNames repoPaths);
@@ -160,6 +176,8 @@ let
       matches = lib.filter (repo: repo.path == currentRoot) filteredRepoRoots;
     in
     if matches == [ ] then
+      # The polyrepo root itself is allowed to generate overrides from
+      # `rootProfiles` without being listed as a child repo entry.
       if currentRoot == polyrepoRoot then
         null
       else

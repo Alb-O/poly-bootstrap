@@ -412,6 +412,9 @@ def bootstrap-target-repo-roots [spec: record]: nothing -> list<path> {
   list-local-repo-paths $polyrepo_root $repo_dirs_root [] []
   | values
   | each {|path| $path | path expand --no-symlink }
+  | where {|repo_root|
+      (($repo_root | path join "devenv.nix") | path exists) or (($repo_root | path join "devenv.yaml") | path exists)
+    }
   | sort
 }
 

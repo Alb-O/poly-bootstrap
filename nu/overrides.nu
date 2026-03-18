@@ -79,12 +79,8 @@ def resolve-overlay [overlay_kind: string overlay_name: string catalog: record s
   }
 }
 
-def find-repo-entry [repo_name: string repo_entries: list<record>]: nothing -> oneof<record, error> {
-  let repo_entry = (
-    $repo_entries
-    | where name == $repo_name
-    | first
-  )
+def find-repo-entry [repo_name: string repo_entries: record]: nothing -> oneof<record, error> {
+  let repo_entry = ($repo_entries | get -o $repo_name)
 
   if (($repo_entry | describe) !~ '^record') {
     fail $"unknown repo '($repo_name)' in polyrepo manifest"
@@ -99,7 +95,9 @@ def resolve-repo-managed-spec [repo_name: string model: record]: nothing -> oneo
     imports: []
   }
 
-  for profile_name in $model.defaultProfiles {
+  # Child repos inherit repo defaults; the polyrepo root uses `rootProfiles`
+  # instead so the top-level shell can stay intentionally smaller/different.
+  for profile_name in $model.repoDefaultProfiles {
     $resolved = merge-managed-spec $resolved (resolve-overlay "profile" $profile_name $model.profiles [])
   }
 
@@ -125,7 +123,7 @@ def resolve-root-managed-spec [model: record]: nothing -> oneof<record, error> {
     imports: []
   }
 
-  for profile_name in $model.defaultProfiles {
+  for profile_name in $model.rootProfiles {
     $resolved = merge-managed-spec $resolved (resolve-overlay "profile" $profile_name $model.profiles [])
   }
 
@@ -166,8 +164,8 @@ export def build-overrides [
 
   mut overrides = {}
   mut local_repo_names_used = []
-  mut visited_repo_names = []
   mut pending_input_names = ($root_spec.inputs | uniq)
+  mut visited_input_names = []
   mut collected_input_imports = []
 
   loop {
@@ -177,6 +175,12 @@ export def build-overrides [
 
     let input_name = ($pending_input_names | first)
     $pending_input_names = ($pending_input_names | skip 1)
+
+    if $input_name in $visited_input_names {
+      continue
+    }
+
+    $visited_input_names = ($visited_input_names | append $input_name)
 
     if not (input-is-selected $input_name $include_inputs $exclude_inputs) {
       continue
@@ -203,21 +207,10 @@ export def build-overrides [
 
     $overrides = add-override $overrides $input_name $copied_spec $"managed input '($input_name)'"
     $collected_input_imports = ($collected_input_imports | append ($input_entry | get imports))
-
-    if (($local_repo_name | describe) != 'string') or ($local_repo_name in $visited_repo_names) {
-      continue
-    }
-
-    let transitive_repo_name = $local_repo_name
-    let transitive_repo_entry = ($model.repos | where name == $transitive_repo_name | first)
-    if (($transitive_repo_entry | describe) !~ '^record') {
-      $visited_repo_names = ($visited_repo_names | append $transitive_repo_name)
-      continue
-    }
-
-    let transitive_spec = resolve-repo-managed-spec $transitive_repo_name $model
-    $visited_repo_names = ($visited_repo_names | append $transitive_repo_name)
-    $pending_input_names = ($pending_input_names | append $transitive_spec.inputs)
+    # Follow only explicit input-level closure. We intentionally do not re-enter
+    # the referenced repo's bundle/profile assignment here, because that made
+    # override generation depend on hidden repo-to-repo policy edges.
+    $pending_input_names = ($pending_input_names | append ($input_entry | get requiresInputs))
   }
 
   let effective_input_names = ($overrides | columns | uniq)

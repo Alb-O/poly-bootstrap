@@ -328,7 +328,7 @@ let
     };
 in
 {
-  localInputOverrides."test sync emits transitive overrides and matching global imports" = {
+  localInputOverrides."test sync emits explicit input closure overrides and matching global imports" = {
     expr =
       let
         output = runSync {
@@ -436,7 +436,7 @@ in
       in
       status.mode == "written"
       && status.changed == true
-      && status.local_repo_count == 3
+      && status.local_repo_count == 4
       && stripContext rendered.inputs.agent-scripts.url
       == stripContext "path:${output}/repos/agent-scripts"
       && stripContext rendered.inputs.docs-shared.url
@@ -464,6 +464,7 @@ in
                 app = "${fixture}/repos/app";
                 nusurf = "${fixture}/repos/nusurf";
                 poly-docs-env = "${fixture}/repos/poly-docs-env";
+                poly-rust-env = "${fixture}/repos/poly-rust-env";
               };
               include_inputs = [ ];
               exclude_inputs = [ ];
@@ -499,6 +500,7 @@ in
                 app = "${fixture}/repos/app";
                 nusurf = "${fixture}/repos/nusurf";
                 poly-docs-env = "${fixture}/repos/poly-docs-env";
+                poly-rust-env = "${fixture}/repos/poly-rust-env";
               };
               include_inputs = [ ];
               exclude_inputs = [ ];
@@ -568,11 +570,12 @@ in
         };
         status = readJson "${output}/status.json";
       in
-      status.local_repo_count == 3
+      status.local_repo_count == 4
       && status.local_repo_names == [
         "agent-scripts"
         "nusurf"
         "poly-docs-env"
+        "poly-rust-env"
       ];
     expected = true;
   };
@@ -668,14 +671,15 @@ in
         status = readJson "${output}/status.json";
         resultRoots = builtins.map (result: stripContext result.repo_root) status.results;
       in
-      status.repo_count == 4
-      && status.success_count == 4
+      status.repo_count == 5
+      && status.success_count == 5
       && status.failure_count == 0
       && resultRoots == [
         "${output}/repos/agent-scripts"
         "${output}/repos/app"
         "${output}/repos/nusurf"
         "${output}/repos/poly-docs-env"
+        "${output}/repos/poly-rust-env"
       ]
       && lib.all (result: result.ok == true && result.status.shell_export_refreshed == true) status.results;
     expected = true;

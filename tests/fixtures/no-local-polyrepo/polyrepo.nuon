@@ -1,7 +1,8 @@
 {
   repoDirsPath: "repos"
 
-  defaultProfiles: [ "local-only" ]
+  rootProfiles: [ "local-only" ]
+  repoDefaultProfiles: [ "local-only" ]
 
   inputs: {
     agent-scripts: {
@@ -20,10 +21,10 @@
     }
   }
 
-  repos: [
-    {
+  repos: {
+    app: {
       path: "repos/app"
       bundle: "empty"
     }
-  ]
+  }
 }

@@ -9,18 +9,18 @@
 
   profiles: {}
 
-  repos: [
-    {
+  repos: {
+    app: {
       path: "repos/app"
       bundle: "empty"
     }
-    {
+    dep: {
       path: "repos/dep"
       bundle: "empty"
     }
-    {
+    transitive: {
       path: "repos/transitive"
       bundle: "empty"
     }
-  ]
+  }
 }

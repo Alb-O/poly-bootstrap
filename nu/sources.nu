@@ -188,13 +188,17 @@ def normalize-polyrepo-input-entry [input_name: string input_value: any manifest
       {
         spec: { url: $input_value }
         imports: []
+        # `requiresInputs` is the only supported closure mechanism. We keep it
+        # on the input itself so local override expansion is explicit and does
+        # not depend on some other repo's bundle assignment.
+        requiresInputs: []
         localRepo: null
       }
     }
     $t if $t =~ '^record' => {
       let entry_spec = (
         $input_value
-        | reject --optional imports localRepo
+        | reject --optional imports requiresInputs localRepo
       )
       let local_repo = ($input_value | get -o localRepo)
       let url = ($entry_spec | get -o url)
@@ -214,6 +218,7 @@ def normalize-polyrepo-input-entry [input_name: string input_value: any manifest
       {
         spec: $entry_spec
         imports: (expect-optional-string-list ($input_value | get -o imports) $source_label "imports")
+        requiresInputs: (expect-optional-string-list ($input_value | get -o requiresInputs) $source_label "requiresInputs")
         localRepo: $normalized_local_repo
       }
     }
@@ -237,8 +242,8 @@ def normalize-polyrepo-overlay-entry [overlay_type: string overlay_name: string 
   }
 }
 
-def normalize-polyrepo-repo-entry [repo_value: any manifest_label: string]: nothing -> oneof<record, error> {
-  let source_label = $"repos entry in ($manifest_label)"
+def normalize-polyrepo-repo-entry [repo_name: string repo_value: any manifest_label: string]: nothing -> oneof<record, error> {
+  let source_label = $"repos.($repo_name) in ($manifest_label)"
 
   if (($repo_value | describe) !~ '^record') {
     fail $"expected ($source_label) to be a mapping"
@@ -247,11 +252,6 @@ def normalize-polyrepo-repo-entry [repo_value: any manifest_label: string]: noth
   let repo_path = ($repo_value | get -o path)
   if (($repo_path | describe) != 'string') or ($repo_path | is-empty) {
     fail $"expected path in ($source_label) to be a non-empty string"
-  }
-
-  let repo_name = ($repo_value | get -o name | default ($repo_path | path basename))
-  if (($repo_name | describe) != 'string') or ($repo_name | is-empty) {
-    fail $"expected name in ($source_label) to be a non-empty string"
   }
 
   let bundle = ($repo_value | get -o bundle)
@@ -264,7 +264,6 @@ def normalize-polyrepo-repo-entry [repo_value: any manifest_label: string]: noth
   }
 
   let normalized = {
-    name: $repo_name
     path: $repo_path
     bundle: $bundle
     profiles: (expect-optional-string-list ($repo_value | get -o profiles) $source_label "profiles")
@@ -286,7 +285,7 @@ export def polyrepo-model-from-polyrepo-manifest [manifest_label: string manifes
   let inputs_catalog = ($manifest | get -o inputs | default {})
   let bundles_catalog = ($manifest | get -o bundles | default {})
   let profiles_catalog = ($manifest | get -o profiles | default {})
-  let repos_catalog = ($manifest | get -o repos | default [])
+  let repos_catalog = ($manifest | get -o repos | default {})
 
   if (($inputs_catalog | describe) !~ '^record') {
     fail $"expected inputs in ($manifest_label) to be a mapping"
@@ -300,30 +299,28 @@ export def polyrepo-model-from-polyrepo-manifest [manifest_label: string manifes
     fail $"expected profiles in ($manifest_label) to be a mapping"
   }
 
-  if (($repos_catalog | describe) !~ '^(list|table)') {
-    fail $"expected repos in ($manifest_label) to be a list"
+  if (($repos_catalog | describe) !~ '^record') {
+    fail $"expected repos in ($manifest_label) to be a mapping"
   }
 
   let repos = (
     $repos_catalog
-    | each {|repo_value| normalize-polyrepo-repo-entry $repo_value $manifest_label }
-  )
-  let duplicate_repo_names = (
-    $repos
-    | group-by name
-    | transpose name entries
-    | where {|group| (($group.entries | length) > 1) }
-    | each {|group| $group.name }
-    | sort
-  )
+    | items {|repo_name, repo_value|
+        if ($repo_name | is-empty) {
+          fail $"expected repos in ($manifest_label) to use non-empty names"
+        }
 
-  if not ($duplicate_repo_names | is-empty) {
-    fail $"expected repos in ($manifest_label) to use unique names: ($duplicate_repo_names | str join ', ')"
-  }
+        # The manifest key is the canonical repo name. Keeping names out of the
+        # payload avoids duplicate sources of truth and makes lookups O(1).
+        [$repo_name (normalize-polyrepo-repo-entry $repo_name $repo_value $manifest_label)]
+      }
+    | into record
+  )
 
   {
     repoDirsPath: $repo_dirs_path
-    defaultProfiles: (expect-optional-string-list ($manifest | get -o defaultProfiles) $manifest_label "defaultProfiles")
+    rootProfiles: (expect-optional-string-list ($manifest | get -o rootProfiles) $manifest_label "rootProfiles")
+    repoDefaultProfiles: (expect-optional-string-list ($manifest | get -o repoDefaultProfiles) $manifest_label "repoDefaultProfiles")
     inputs: (
       $inputs_catalog
       | items {|input_name, input_value|
@@ -353,10 +350,10 @@ export def repo-dirs-path-from-polyrepo-manifest [manifest_label: string manifes
   polyrepo-model-from-polyrepo-manifest $manifest_label $manifest_text | get repoDirsPath
 }
 
-export def repo-records-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<list<record>, error> {
+export def repo-records-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<record, error> {
   polyrepo-model-from-polyrepo-manifest $manifest_label $manifest_text | get repos
 }
 
 export def repo-paths-from-polyrepo-manifest [manifest_label: string manifest_text: string]: nothing -> oneof<list<path>, error> {
-  repo-records-from-polyrepo-manifest $manifest_label $manifest_text | get path
+  repo-records-from-polyrepo-manifest $manifest_label $manifest_text | values | get path
 }

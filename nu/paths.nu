@@ -146,9 +146,8 @@ export def list-local-repo-paths [polyrepo_root: path repo_dirs_root: path inclu
   let manifest_text = open --raw $manifest_path
   let declared_repo_roots = (
     repo-records-from-polyrepo-manifest $manifest_label $manifest_text
-    | each {|repo_entry|
-        let resolved_path = resolve-repo-path $polyrepo_root $repo_entry.path
-        let resolved_name = $repo_entry.name
+    | items {|resolved_name, repo_entry|
+        let resolved_path = resolve-repo-path $polyrepo_root ($repo_entry | get path)
         let relative_path = maybe-relativize $resolved_path $repo_dirs_root
 
         if (($relative_path | describe) == 'nothing') {

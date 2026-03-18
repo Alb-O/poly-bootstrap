@@ -4,10 +4,11 @@ Reusable `devenv` module that generates `devenv.local.yaml` from the enclosing
 `polyrepo.nuon` manifest.
 
 `polyrepo.nuon` now owns the local input catalog, bundle/profile composition,
-and repo-to-bundle assignment. The generator resolves the current repo's
-assigned bundle and profiles, then walks transitive local repos through their
-own manifest-assigned bundles. It no longer scans the consumer repo's
-`devenv.yaml` to decide what to generate.
+repo-to-bundle assignment, and explicit input closure. The generator resolves
+the current repo's assigned bundle and profiles, then follows only the
+`requiresInputs` edges declared on selected inputs. It no longer scans the
+consumer repo's `devenv.yaml` or walks other repos' bundle assignments to
+decide what to generate.
 
 ## Includes
 
@@ -45,7 +46,7 @@ devenv shell --no-tui -- bash -lc 'run-nix-tests'
   the input repo. They do not refer to an `outputs.<name>` attr.
 - `${polyrepoRoot}/polyrepo.nuon` owns the repo catalog through `repos`, and
   also owns generated local-input policy through `inputs`, `bundles`,
-  `profiles`, and `defaultProfiles`.
+  `profiles`, `rootProfiles`, and `repoDefaultProfiles`.
   That manifest is the direct source for generated
   `devenv.local.yaml` files.
 - `devenv.local.yaml` must exist before `devenv` starts. `devenv` loads local
@@ -64,8 +65,6 @@ use devenv
   The runtime and Nix paths both use that manifest-owned repo catalog instead of
   scanning the filesystem heuristically.
 
-- Existing stale `devenv.local.yaml` files still need one refresh before newly
-  discovered transitive overrides can affect the next evaluation.
 - `bootstrap` also refreshes `devenv.lock` when the generated local
   inputs and the current lockfile root inputs drift, even if `devenv.local.yaml`
   itself did not change. It now decides that from `sync --json` status instead
@@ -81,6 +80,8 @@ use devenv
   repos before refreshing generated files with `devenv:files`. This covers
   managed-Cargo workspaces such as `nusim_app -> nusim_backend -> nusim_core`
   without manually entering each repo first.
+- `bootstrap --all-repos` only targets repos that expose `devenv.nix` or
+  `devenv.yaml`. Plain source mirrors in the repo catalog are skipped.
 - `bin/bootstrap-repo.nu` contains the actual bootstrap logic. The
   sibling top-level `bootstrap` Bash file is only a thin launcher
   that `exec`s into `nu` when available, or falls back to the repo-owned pinned
@@ -187,7 +188,8 @@ once for the whole polyrepo:
 {
   repoDirsPath: "repos"
 
-  defaultProfiles: [ "shared-tooling" ]
+  rootProfiles: [ "shared-tooling" ]
+  repoDefaultProfiles: [ "shared-tooling" ]
 
   inputs: {
     agent-scripts: {
@@ -214,8 +216,8 @@ once for the whole polyrepo:
     }
   }
 
-  repos: [
-    {
+  repos: {
+    agent-scripts: {
       path: "repos/agent-scripts"
       bundle: "bootstrap-only"
     }
@@ -225,17 +227,19 @@ once for the whole polyrepo:
 
 `repos` is the authoritative repo catalog for bootstrap, root inference, and
 local path override resolution. Each entry is a repo-relative or absolute repo
-root record with optional bundle/profile assignment.
+root record keyed by manifest repo name, with optional bundle/profile
+assignment.
 
 Each `inputs.<name>` entry accepts the normal input spec fields plus:
 - optional `imports`
+- optional `requiresInputs` for explicit local input closure
 - optional `localRepo` to map an input alias to a different local repo name
 
 Rules:
 
 - bundle/profile imports are only emitted when the referenced input exists after generation
 - input-attached imports also participate in that filtering
-- transitive local expansion follows manifest-assigned repo bundles, not repo-local `devenv.yaml` scans
+- input closure follows `inputs.<name>.requiresInputs`, not other repos' bundle assignments
 - nested imports such as `repo-name/subdir` are supported, matched against the base input name, and resolved as real module paths inside the input repo
 
 ## Shared Module Rule
