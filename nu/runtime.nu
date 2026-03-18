@@ -744,10 +744,7 @@ def render-target-overrides [model: record target_kind: string target_name: any]
   }
 }
 
-export def render-local-overrides [target_path?: path]: nothing -> string {
-  let target = resolve-target ($target_path | default ".")
-  let rendered = render-target-overrides $target.model $target.target_kind $target.target_name
-
+def render-overrides-text [rendered: record]: nothing -> string {
   if (($rendered.overrides | columns | is-empty) and ($rendered.imports | is-empty)) {
     return ""
   }
@@ -834,19 +831,7 @@ export def sync [target_path?: path]: nothing -> record {
   let output_path = ($target.target_root | path join "devenv.local.yaml")
   let lock_path = ($target.target_root | path join "devenv.lock")
   let rendered = render-target-overrides $target.model $target.target_kind $target.target_name
-
-  let overrides_text = if (($rendered.overrides | columns | is-empty) and ($rendered.imports | is-empty)) {
-    ""
-  } else {
-    mut output = {}
-    if not (($rendered.overrides | columns) | is-empty) {
-      $output = ($output | merge { inputs: (sort-record $rendered.overrides) })
-    }
-    if not ($rendered.imports | is-empty) {
-      $output = ($output | merge { imports: $rendered.imports })
-    }
-    $output | to yaml
-  }
+  let overrides_text = render-overrides-text $rendered
 
   let existing_text = if ($output_path | path exists) {
     open --raw $output_path

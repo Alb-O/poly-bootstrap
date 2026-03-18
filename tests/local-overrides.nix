@@ -481,23 +481,6 @@ in
     expected = true;
   };
 
-  localInputOverrides."test bootstrap ignores legacy polyrepo root flag during cutover" = {
-    expr =
-      let
-        output = runBootstrapJson {
-          derivationNamePrefix = "polyrepo-bootstrap-legacy-flag";
-          fixture = "recursive-polyrepo";
-          repoPath = "repos/app";
-          extraArgs = [ "--polyrepo-root" "." ];
-        };
-        status = readJson "${output}/status.json";
-      in
-      status.target_name == "app"
-      && status.sync.mode == "written"
-      && status.shell_export_refreshed == true;
-    expected = true;
-  };
-
   localInputOverrides."test sync reports clearer repo catalog mismatch errors" = {
     expr =
       let

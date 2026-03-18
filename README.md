@@ -50,7 +50,7 @@ Key rules:
 
 - `devenv.local.yaml` must exist before `devenv` starts; bootstrap is the only supported writer.
 - `bootstrap --all-repos` targets only repos that expose `devenv.yaml` or `devenv.nix`.
-- The root workspace is first-class. `check .`, `sync .`, and `bootstrap .` work from the polyrepo root without `--polyrepo-root`.
+- The root workspace is first-class. `check .`, `sync .`, and `bootstrap .` work from the polyrepo root directly.
 - `devenv-run` and the direnv helper both call the same shared bootstrap function.
 
 ## Testing

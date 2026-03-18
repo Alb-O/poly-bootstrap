@@ -14,7 +14,6 @@ def main [] {
 
 def "main check" [
   target_path?: path
-  --polyrepo-root: path
   --json (-j)
 ] {
   let status = check $target_path
@@ -32,7 +31,6 @@ def "main check" [
 
 def "main sync" [
   target_path?: path
-  --polyrepo-root: path
   --json (-j)
 ] {
   let status = sync $target_path
@@ -46,7 +44,6 @@ def "main sync" [
 
 def "main bootstrap" [
   target_path?: path
-  --polyrepo-root: path
   --all-repos (-a)
   --json (-j)
 ] {
