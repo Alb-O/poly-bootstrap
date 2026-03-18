@@ -1,8 +1,9 @@
 {
   repoDirsPath: "repos"
 
-  rootProfiles: [ "local-only" ]
-  repoDefaultProfiles: [ "local-only" ]
+  root: {
+    layers: [ "remote-only" ]
+  }
 
   inputs: {
     agent-scripts: {
@@ -11,12 +12,8 @@
     }
   }
 
-  bundles: {
-    empty: {}
-  }
-
-  profiles: {
-    local-only: {
+  layers: {
+    remote-only: {
       inputs: [ "agent-scripts" ]
     }
   }
@@ -24,7 +21,7 @@
   repos: {
     app: {
       path: "repos/app"
-      bundle: "empty"
+      layers: [ "remote-only" ]
     }
   }
 }

@@ -1,8 +1,9 @@
 {
   repoDirsPath: "repos"
 
-  rootProfiles: [ "shared-tooling" ]
-  repoDefaultProfiles: [ "shared-tooling" ]
+  root: {
+    layers: [ "shared-tooling" ]
+  }
 
   inputs: {
     agent-scripts: {
@@ -10,61 +11,63 @@
       flake: false
       imports: [ "agent-scripts/tooling" ]
       requiresInputs: [ "docs-shared" ]
+      localRepo: "agent-scripts"
     }
     docs-shared: {
       url: "github:Alb-O/poly-docs-env"
       flake: false
-      localRepo: "poly-docs-env"
       imports: [ "docs-shared/subdir" ]
+      localRepo: "poly-docs-env"
     }
     nusurf: {
       url: "github:Alb-O/nusurf"
       flake: false
       imports: [ "nusurf/nushell-plugin" ]
       requiresInputs: [ "poly-rust-env" ]
+      localRepo: "nusurf"
     }
     poly-rust-env: {
       url: "github:Alb-O/poly-rust-env"
       flake: false
+      localRepo: "poly-rust-env"
     }
   }
 
-  bundles: {
-    empty: {}
-    agent-scripts-bundle: {
-      inputs: [ "docs-shared" ]
-    }
-    nusurf-bundle: {
-      inputs: [ "poly-rust-env" ]
-    }
-  }
-
-  profiles: {
+  layers: {
     shared-tooling: {
       inputs: [ "agent-scripts" "nusurf" ]
+    }
+    repo-empty: {
+      extends: [ "shared-tooling" ]
+    }
+    repo-agent-scripts: {
+      extends: [ "shared-tooling" ]
+      inputs: [ "docs-shared" ]
+    }
+  }
+
+  repoGroups: {
+    dependency-repos: {
+      members: {
+        nusurf: "repos/nusurf"
+        poly-docs-env: "repos/poly-docs-env"
+        poly-rust-env: "repos/poly-rust-env"
+      }
+      layers: [ "repo-empty" ]
     }
   }
 
   repos: {
     agent-scripts: {
       path: "repos/agent-scripts"
-      bundle: "agent-scripts-bundle"
+      layers: [ "repo-agent-scripts" ]
+      bootstrapTasks: [ "devenv:files" ]
     }
     app: {
       path: "repos/app"
-      bundle: "empty"
-    }
-    nusurf: {
-      path: "repos/nusurf"
-      bundle: "nusurf-bundle"
-    }
-    poly-docs-env: {
-      path: "repos/poly-docs-env"
-      bundle: "empty"
-    }
-    poly-rust-env: {
-      path: "repos/poly-rust-env"
-      bundle: "empty"
+      layers: [ "repo-empty" ]
+      bootstrapDeps: [ "agent-scripts" ]
+      bootstrapTasks: [ "devenv:files" ]
     }
   }
 }

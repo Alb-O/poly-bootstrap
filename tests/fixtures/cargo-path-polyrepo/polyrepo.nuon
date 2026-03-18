@@ -1,26 +1,33 @@
 {
   repoDirsPath: "repos"
 
-  inputs: {}
-
-  bundles: {
-    empty: {}
+  root: {
+    layers: []
   }
 
-  profiles: {}
+  inputs: {}
+
+  layers: {
+    empty: {}
+  }
 
   repos: {
     app: {
       path: "repos/app"
-      bundle: "empty"
+      layers: [ "empty" ]
+      bootstrapDeps: [ "dep" ]
+      bootstrapTasks: [ "devenv:files" ]
     }
     dep: {
       path: "repos/dep"
-      bundle: "empty"
+      layers: [ "empty" ]
+      bootstrapDeps: [ "transitive" ]
+      bootstrapTasks: [ "devenv:files" ]
     }
     transitive: {
       path: "repos/transitive"
-      bundle: "empty"
+      layers: [ "empty" ]
+      bootstrapTasks: [ "devenv:files" ]
     }
   }
 }

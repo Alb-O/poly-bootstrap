@@ -1,7 +1,6 @@
-export use commands.nu [
+export use runtime.nu [
   bootstrap
   bootstrap-all
-  lock-status
-  render-local-overrides
-  sync-local-overrides
+  check
+  sync
 ]
