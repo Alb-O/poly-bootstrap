@@ -45,6 +45,10 @@ def render-target-overrides [
       fail $"unknown input '($input_name)'"
     }
 
+    $overrides = ($overrides | merge { $input_name: $input_entry.spec })
+    $collected_input_imports = ($collected_input_imports | append $input_entry.imports)
+    $pending_inputs = ($pending_inputs | append $input_entry.requiresInputs)
+
     let local_repo = $input_entry.localRepo
     if not (is-string $local_repo) {
       continue
@@ -59,8 +63,6 @@ def render-target-overrides [
     $overrides = ($overrides | merge {
       $input_name: ($input_entry.spec | merge { url: $"path:($repo_path)" })
     })
-    $collected_input_imports = ($collected_input_imports | append $input_entry.imports)
-    $pending_inputs = ($pending_inputs | append $input_entry.requiresInputs)
   }
 
   let effective_input_names = ($overrides | columns | uniq)

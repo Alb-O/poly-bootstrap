@@ -2,26 +2,17 @@
   repoDirsPath: "repos"
 
   root: {
-    layers: [ "remote-only" ]
+    layers: []
   }
 
-  inputs: {
-    remote_tools: {
-      url: "github:Alb-O/remote_tools"
-      flake: false
-    }
-  }
+  inputs: {}
 
-  layers: {
-    remote-only: {
-      inputs: [ "remote_tools" ]
-    }
-  }
+  layers: {}
 
   repos: {
     app: {
       path: "repos/app"
-      layers: [ "remote-only" ]
+      layers: []
     }
   }
 }

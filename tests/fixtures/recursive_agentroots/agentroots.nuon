@@ -10,7 +10,16 @@
       url: "github:Alb-O/ar_devenv_base"
       flake: false
       imports: [ "ar_devenv_base" ]
+      requiresInputs: [ "git-hooks" "treefmt-nix" ]
       localRepo: "ar_devenv_base"
+    }
+    git-hooks: {
+      url: "github:cachix/git-hooks.nix"
+      inputs: { nixpkgs: { follows: "nixpkgs" } }
+    }
+    treefmt-nix: {
+      url: "github:numtide/treefmt-nix"
+      inputs: { nixpkgs: { follows: "nixpkgs" } }
     }
     docs-shared: {
       url: "github:Alb-O/ar_devenv_docs"

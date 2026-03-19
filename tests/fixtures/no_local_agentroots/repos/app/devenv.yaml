@@ -1,6 +1,2 @@
-inputs:
-  remote-only:
-    url: github:Alb-O/not-local
-    flake: false
-imports:
-  - remote-only
+inputs: {}
+imports: []

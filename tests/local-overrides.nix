@@ -90,7 +90,7 @@ let
           [
             "#!/usr/bin/env bash"
             "export DEVENV_FAKE=1"
-            'eval "${shellHook:-}"'
+            'eval "${"shellHook:-"}"'
           ] | str join "\n" | save --force ($shell_dir | path join $"shell-fake-($export_index).sh")
           return
         }
@@ -210,7 +210,13 @@ let
       extraArgs ? [ ],
     }:
     runFixture {
-      inherit derivationNamePrefix fixture repoPath extraArgs beforeRun;
+      inherit
+        derivationNamePrefix
+        fixture
+        repoPath
+        extraArgs
+        beforeRun
+        ;
       script = ''
         ${nu} ${agentroots_script} check "$repo_path" --json $argsString > "$out/status.json"
       '';
@@ -224,7 +230,12 @@ let
       beforeRun ? "",
     }:
     runFixture {
-      inherit derivationNamePrefix fixture repoPath beforeRun;
+      inherit
+        derivationNamePrefix
+        fixture
+        repoPath
+        beforeRun
+        ;
       script = ''
         ${nu} ${agentroots_script} sync "$repo_path"
       '';
@@ -239,7 +250,12 @@ let
       prepare ? "",
     }:
     runFixture {
-      inherit derivationNamePrefix fixture repoPath beforeRun;
+      inherit
+        derivationNamePrefix
+        fixture
+        repoPath
+        beforeRun
+        ;
       script = ''
         ${prepare}
         ${nu} ${agentroots_script} sync "$repo_path" --json > "$out/status.json"
@@ -255,7 +271,13 @@ let
       beforeRun ? "",
     }:
     runFixture {
-      inherit derivationNamePrefix fixture repoPath extraArgs beforeRun;
+      inherit
+        derivationNamePrefix
+        fixture
+        repoPath
+        extraArgs
+        beforeRun
+        ;
       script = ''
         set +e
         ${nu} ${agentroots_script} sync "$repo_path" $argsString > "$out/stdout.txt" 2> "$out/stderr.txt"
@@ -277,7 +299,13 @@ let
       beforeRun ? "",
     }:
     runFixture {
-      inherit derivationNamePrefix fixture repoPath extraArgs beforeRun;
+      inherit
+        derivationNamePrefix
+        fixture
+        repoPath
+        extraArgs
+        beforeRun
+        ;
       script = ''
         mkdir -p "$out/bin"
         install -Dm755 ${fakeDevenvScript} "$out/bin/devenv"
@@ -298,7 +326,13 @@ let
       beforeRun ? "",
     }:
     runFixture {
-      inherit derivationNamePrefix fixture repoPath extraArgs beforeRun;
+      inherit
+        derivationNamePrefix
+        fixture
+        repoPath
+        extraArgs
+        beforeRun
+        ;
       script = ''
         mkdir -p "$out/bin"
         install -Dm755 ${fakeDevenvScript} "$out/bin/devenv"
@@ -320,7 +354,13 @@ let
       betweenRuns ? "",
     }:
     runFixture {
-      inherit derivationNamePrefix fixture repoPath extraArgs beforeRun;
+      inherit
+        derivationNamePrefix
+        fixture
+        repoPath
+        extraArgs
+        beforeRun
+        ;
       script = ''
         mkdir -p "$out/bin"
         install -Dm755 ${fakeDevenvScript} "$out/bin/devenv"
@@ -398,19 +438,20 @@ in
         };
         rendered = readYaml "${output}/repos/app/devenv.local.yaml";
       in
-      stripContext rendered.inputs.nusurf.url
-      == stripContext "path:${output}/repos/nusurf"
-      && stripContext rendered.inputs.ar_devenv_base.url
-      == stripContext "path:${output}/repos/ar_devenv_base"
-      && stripContext rendered.inputs.agentroots.url
-      == stripContext "path:${output}/repos/agentroots"
-      && stripContext rendered.inputs.ar_devenv_rust.url
-      == stripContext "path:${output}/repos/ar_devenv_rust"
-      && rendered.imports == [
-        "ar_devenv_base"
-        "nusurf/nushell-plugin"
-        "agentroots/tooling"
-      ];
+      stripContext rendered.inputs.nusurf.url == stripContext "path:${output}/repos/nusurf"
+      &&
+        stripContext rendered.inputs.ar_devenv_base.url
+        == stripContext "path:${output}/repos/ar_devenv_base"
+      && stripContext rendered.inputs.agentroots.url == stripContext "path:${output}/repos/agentroots"
+      &&
+        stripContext rendered.inputs.ar_devenv_rust.url
+        == stripContext "path:${output}/repos/ar_devenv_rust"
+      &&
+        rendered.imports == [
+          "ar_devenv_base"
+          "nusurf/nushell-plugin"
+          "agentroots/tooling"
+        ];
     expected = true;
   };
 
@@ -434,15 +475,16 @@ in
       status.target_kind == "root"
       && status.mode == "written"
       && status.local_repo_count == 4
-      && stripContext rendered.inputs.ar_devenv_base.url
-      == stripContext "path:${output}/repos/ar_devenv_base"
-      && stripContext rendered.inputs.agentroots.url
-      == stripContext "path:${output}/repos/agentroots"
-      && rendered.imports == [
-        "ar_devenv_base"
-        "nusurf/nushell-plugin"
-        "agentroots/tooling"
-      ];
+      &&
+        stripContext rendered.inputs.ar_devenv_base.url
+        == stripContext "path:${output}/repos/ar_devenv_base"
+      && stripContext rendered.inputs.agentroots.url == stripContext "path:${output}/repos/agentroots"
+      &&
+        rendered.imports == [
+          "ar_devenv_base"
+          "nusurf/nushell-plugin"
+          "agentroots/tooling"
+        ];
     expected = true;
   };
 
@@ -532,17 +574,18 @@ in
       in
       status.ok == false
       && status.error_count == 9
-      && errorPaths == [
-        "root.layers"
-        "inputs.alias.localRepo"
-        "inputs.alias.requiresInputs"
-        "layers.broken.extends"
-        "layers.broken.inputs"
-        "layers.broken.imports"
-        "layers.broken"
-        "repos.app.layers"
-        "repos.app.bootstrapDeps"
-      ];
+      &&
+        errorPaths == [
+          "root.layers"
+          "inputs.alias.localRepo"
+          "inputs.alias.requiresInputs"
+          "layers.broken.extends"
+          "layers.broken.inputs"
+          "layers.broken.imports"
+          "layers.broken"
+          "repos.app.layers"
+          "repos.app.bootstrapDeps"
+        ];
     expected = true;
   };
 
@@ -557,56 +600,65 @@ in
         status = readJson "${output}/status.json";
         appRendered = readYaml "${output}/repos/app/devenv.local.yaml";
         depRendered = readYaml "${output}/repos/bootstrap_dep/devenv.local.yaml";
-        bootstrapLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/bootstrap.log"));
-        filesLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/devenv-files.log"));
+        bootstrapLog = builtins.filter (line: line != "") (
+          lib.splitString "\n" (builtins.readFile "${output}/bootstrap.log")
+        );
+        filesLog = builtins.filter (line: line != "") (
+          lib.splitString "\n" (builtins.readFile "${output}/devenv-files.log")
+        );
       in
       status.target_name == "app"
       && status.dependency_repos == [ "bootstrap_dep" ]
-      && stripContext appRendered.inputs.agentroots.url
-      == stripContext "path:${output}/repos/agentroots"
-      && stripContext depRendered.inputs.docs-shared.url
-      == stripContext "path:${output}/repos/ar_devenv_docs"
+      && stripContext appRendered.inputs.agentroots.url == stripContext "path:${output}/repos/agentroots"
+      &&
+        stripContext depRendered.inputs.docs-shared.url
+        == stripContext "path:${output}/repos/ar_devenv_docs"
       && bootstrapLog == [ "${output}/repos/app" ]
-      && filesLog == [
-        "${output}/repos/bootstrap_dep"
-        "${output}/repos/app"
-      ];
+      &&
+        filesLog == [
+          "${output}/repos/bootstrap_dep"
+          "${output}/repos/app"
+        ];
     expected = true;
   };
 
-  localInputOverrides."test consumer tooling module exposes committer and devenv-run from AgentRoots tooling" = {
-    expr =
-      let
-        output = runtimeFixture "ar_consumer_tooling_module";
-        result = evalSharedTooling {
-          root = output;
-          pkgsForTooling = pkgsWithFakeDevenv;
-        };
-      in
-      result.config.outputs ? committer
-      && result.config.outputs ? devenv-run
-      && builtins.pathExists "${result.config.outputs.committer}/bin/committer"
-      && builtins.pathExists "${result.config.outputs.devenv-run}/bin/devenv-run";
-    expected = true;
-  };
+  localInputOverrides."test consumer tooling module exposes committer and devenv-run from AgentRoots tooling" =
+    {
+      expr =
+        let
+          output = runtimeFixture "ar_consumer_tooling_module";
+          result = evalSharedTooling {
+            root = output;
+            pkgsForTooling = pkgsWithFakeDevenv;
+          };
+        in
+        result.config.outputs ? committer
+        && result.config.outputs ? devenv-run
+        && builtins.pathExists "${result.config.outputs.committer}/bin/committer"
+        && builtins.pathExists "${result.config.outputs.devenv-run}/bin/devenv-run";
+      expected = true;
+    };
 
-  localInputOverrides."test bootstrap materializes a shell export and metadata for the target repo" = {
-    expr =
-      let
-        output = runBootstrapJson {
-          derivationNamePrefix = "ar_bootstrap_shell_export_meta";
-          fixture = "recursive_agentroots";
-          repoPath = "repos/app";
-        };
-        status = readJson "${output}/status.json";
-        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
-      in
-      status.shell_export_refreshed == true
-      && status.shell_export_reason == "forced_refresh"
-      && builtins.pathExists "${output}/repos/app/.devenv/ar_shell_export.meta"
-      && shellExportLog == [ "${output}/repos/app" ];
-    expected = true;
-  };
+  localInputOverrides."test bootstrap materializes a shell export and metadata for the target repo" =
+    {
+      expr =
+        let
+          output = runBootstrapJson {
+            derivationNamePrefix = "ar_bootstrap_shell_export_meta";
+            fixture = "recursive_agentroots";
+            repoPath = "repos/app";
+          };
+          status = readJson "${output}/status.json";
+          shellExportLog = builtins.filter (line: line != "") (
+            lib.splitString "\n" (builtins.readFile "${output}/shell-export.log")
+          );
+        in
+        status.shell_export_refreshed == true
+        && status.shell_export_reason == "forced_refresh"
+        && builtins.pathExists "${output}/repos/app/.devenv/ar_shell_export.meta"
+        && shellExportLog == [ "${output}/repos/app" ];
+      expected = true;
+    };
 
   localInputOverrides."test bootstrap reuses shell export when metadata matches" = {
     expr =
@@ -617,7 +669,9 @@ in
           repoPath = "repos/nusurf";
         };
         secondStatus = readJson "${output}/second-status.json";
-        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+        shellExportLog = builtins.filter (line: line != "") (
+          lib.splitString "\n" (builtins.readFile "${output}/shell-export.log")
+        );
       in
       secondStatus.shell_export_refreshed == false
       && secondStatus.shell_export_reason == "reused"
@@ -637,14 +691,17 @@ in
           '';
         };
         secondStatus = readJson "${output}/second-status.json";
-        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+        shellExportLog = builtins.filter (line: line != "") (
+          lib.splitString "\n" (builtins.readFile "${output}/shell-export.log")
+        );
       in
       secondStatus.shell_export_refreshed == true
       && secondStatus.shell_export_reason == "missing_meta"
-      && shellExportLog == [
-        "${output}/repos/nusurf"
-        "${output}/repos/nusurf"
-      ];
+      &&
+        shellExportLog == [
+          "${output}/repos/nusurf"
+          "${output}/repos/nusurf"
+        ];
     expected = true;
   };
 
@@ -662,14 +719,17 @@ in
           '';
         };
         secondStatus = readJson "${output}/second-status.json";
-        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+        shellExportLog = builtins.filter (line: line != "") (
+          lib.splitString "\n" (builtins.readFile "${output}/shell-export.log")
+        );
       in
       secondStatus.shell_export_refreshed == true
       && secondStatus.shell_export_reason == "meta_parse_error"
-      && shellExportLog == [
-        "${output}/repos/nusurf"
-        "${output}/repos/nusurf"
-      ];
+      &&
+        shellExportLog == [
+          "${output}/repos/nusurf"
+          "${output}/repos/nusurf"
+        ];
     expected = true;
   };
 
@@ -685,14 +745,17 @@ in
           '';
         };
         secondStatus = readJson "${output}/second-status.json";
-        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+        shellExportLog = builtins.filter (line: line != "") (
+          lib.splitString "\n" (builtins.readFile "${output}/shell-export.log")
+        );
       in
       secondStatus.shell_export_refreshed == true
       && secondStatus.shell_export_reason == "stale_fingerprint"
-      && shellExportLog == [
-        "${output}/repos/nusurf"
-        "${output}/repos/nusurf"
-      ];
+      &&
+        shellExportLog == [
+          "${output}/repos/nusurf"
+          "${output}/repos/nusurf"
+        ];
     expected = true;
   };
 
@@ -720,57 +783,66 @@ in
           '';
         };
         secondStatus = readJson "${output}/second-status.json";
-        shellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/shell-export.log"));
+        shellExportLog = builtins.filter (line: line != "") (
+          lib.splitString "\n" (builtins.readFile "${output}/shell-export.log")
+        );
       in
       secondStatus.shell_export_refreshed == true
       && secondStatus.shell_export_reason == "stale_fingerprint"
-      && shellExportLog == [
-        "${output}/repos/nusurf"
-        "${output}/repos/nusurf"
-      ];
+      &&
+        shellExportLog == [
+          "${output}/repos/nusurf"
+          "${output}/repos/nusurf"
+        ];
     expected = true;
   };
 
-  localInputOverrides."test packaged devenv-run refreshes shell export after AgentRoots wrapper source changes" = {
-    expr =
-      let
-        initialSourceTree = runtimeFixture "ar_packaged_devenv_run_source_initial";
-        initialTooling = evalSharedTooling {
-          root = initialSourceTree;
-          pkgsForTooling = pkgsWithFakeDevenv;
-        };
-        initialRun = runPackagedDevenvRun {
-          derivationNamePrefix = "ar_packaged_devenv_run_initial";
-          sourceTree = initialSourceTree;
-          devenvRunPackage = initialTooling.config.outputs.devenv-run;
-        };
-        changedSourceTree = pkgs.runCommand "ar_packaged_devenv_run_source_changed" { } ''
-          mkdir -p "$out"
-          cp -R ${initialRun}/. "$out"/
-          chmod -R u+w "$out"
-          printf '\n# changed\n' >> "$out/repos/agentroots/nu/agentroots/devenv_run.nu"
-        '';
-        changedTooling = evalSharedTooling {
-          root = changedSourceTree;
-          pkgsForTooling = pkgsWithFakeDevenv;
-        };
-        changedRun = runPackagedDevenvRun {
-          derivationNamePrefix = "ar_packaged_devenv_run_changed";
-          sourceTree = changedSourceTree;
-          devenvRunPackage = changedTooling.config.outputs.devenv-run;
-        };
-        initialShellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${initialRun}/shell-export.log"));
-        changedShellExportLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${changedRun}/shell-export.log"));
-      in
-      initialTooling.config.outputs.devenv-run != changedTooling.config.outputs.devenv-run
-      && builtins.readFile "${initialRun}/report/devenv-run-path.txt"
-      != builtins.readFile "${changedRun}/report/devenv-run-path.txt"
-      && builtins.readFile "${initialRun}/report/devenv-fake.txt" == "1\n"
-      && builtins.readFile "${changedRun}/report/devenv-fake.txt" == "1\n"
-      && (builtins.length initialShellExportLog) == 1
-      && (builtins.length changedShellExportLog) == 2;
-    expected = true;
-  };
+  localInputOverrides."test packaged devenv-run refreshes shell export after AgentRoots wrapper source changes" =
+    {
+      expr =
+        let
+          initialSourceTree = runtimeFixture "ar_packaged_devenv_run_source_initial";
+          initialTooling = evalSharedTooling {
+            root = initialSourceTree;
+            pkgsForTooling = pkgsWithFakeDevenv;
+          };
+          initialRun = runPackagedDevenvRun {
+            derivationNamePrefix = "ar_packaged_devenv_run_initial";
+            sourceTree = initialSourceTree;
+            devenvRunPackage = initialTooling.config.outputs.devenv-run;
+          };
+          changedSourceTree = pkgs.runCommand "ar_packaged_devenv_run_source_changed" { } ''
+            mkdir -p "$out"
+            cp -R ${initialRun}/. "$out"/
+            chmod -R u+w "$out"
+            printf '\n# changed\n' >> "$out/repos/agentroots/nu/agentroots/devenv_run.nu"
+          '';
+          changedTooling = evalSharedTooling {
+            root = changedSourceTree;
+            pkgsForTooling = pkgsWithFakeDevenv;
+          };
+          changedRun = runPackagedDevenvRun {
+            derivationNamePrefix = "ar_packaged_devenv_run_changed";
+            sourceTree = changedSourceTree;
+            devenvRunPackage = changedTooling.config.outputs.devenv-run;
+          };
+          initialShellExportLog = builtins.filter (line: line != "") (
+            lib.splitString "\n" (builtins.readFile "${initialRun}/shell-export.log")
+          );
+          changedShellExportLog = builtins.filter (line: line != "") (
+            lib.splitString "\n" (builtins.readFile "${changedRun}/shell-export.log")
+          );
+        in
+        initialTooling.config.outputs.devenv-run != changedTooling.config.outputs.devenv-run
+        &&
+          builtins.readFile "${initialRun}/report/devenv-run-path.txt"
+          != builtins.readFile "${changedRun}/report/devenv-run-path.txt"
+        && builtins.readFile "${initialRun}/report/devenv-fake.txt" == "1\n"
+        && builtins.readFile "${changedRun}/report/devenv-fake.txt" == "1\n"
+        && (builtins.length initialShellExportLog) == 1
+        && (builtins.length changedShellExportLog) == 2;
+      expected = true;
+    };
 
   localInputOverrides."test bootstrap all emits per-repo json summary" = {
     expr =
@@ -787,42 +859,49 @@ in
       status.repo_count == 7
       && status.success_count == 7
       && status.failure_count == 0
-      && resultRoots == [
-        "${output}/repos/agentroots"
-        "${output}/repos/app"
-        "${output}/repos/ar_devenv_base"
-        "${output}/repos/ar_devenv_docs"
-        "${output}/repos/ar_devenv_rust"
-        "${output}/repos/bootstrap_dep"
-        "${output}/repos/nusurf"
-      ]
-      && lib.all (result: result.ok == true && result.status.shell_export_refreshed == true) status.results;
+      &&
+        resultRoots == [
+          "${output}/repos/agentroots"
+          "${output}/repos/app"
+          "${output}/repos/ar_devenv_base"
+          "${output}/repos/ar_devenv_docs"
+          "${output}/repos/ar_devenv_rust"
+          "${output}/repos/bootstrap_dep"
+          "${output}/repos/nusurf"
+        ]
+      && lib.all (
+        result: result.ok == true && result.status.shell_export_refreshed == true
+      ) status.results;
     expected = true;
   };
 
-  localInputOverrides."test bootstrap uses manifest dependency order and declared devenv files tasks" = {
-    expr =
-      let
-        output = runBootstrap {
-          derivationNamePrefix = "ar_bootstrap_declared_tasks";
-          fixture = "cargo_path_agentroots";
-          repoPath = "repos/app";
-        };
-        appManifestExists = builtins.pathExists "${output}/repos/app/Cargo.toml";
-        depManifestExists = builtins.pathExists "${output}/repos/dep/Cargo.toml";
-        transitiveManifestExists = builtins.pathExists "${output}/repos/transitive/Cargo.toml";
-        filesLog = builtins.filter (line: line != "") (lib.splitString "\n" (builtins.readFile "${output}/devenv-files.log"));
-      in
-      appManifestExists
-      && depManifestExists
-      && transitiveManifestExists
-      && filesLog == [
-        "${output}/repos/transitive"
-        "${output}/repos/dep"
-        "${output}/repos/app"
-      ];
-    expected = true;
-  };
+  localInputOverrides."test bootstrap uses manifest dependency order and declared devenv files tasks" =
+    {
+      expr =
+        let
+          output = runBootstrap {
+            derivationNamePrefix = "ar_bootstrap_declared_tasks";
+            fixture = "cargo_path_agentroots";
+            repoPath = "repos/app";
+          };
+          appManifestExists = builtins.pathExists "${output}/repos/app/Cargo.toml";
+          depManifestExists = builtins.pathExists "${output}/repos/dep/Cargo.toml";
+          transitiveManifestExists = builtins.pathExists "${output}/repos/transitive/Cargo.toml";
+          filesLog = builtins.filter (line: line != "") (
+            lib.splitString "\n" (builtins.readFile "${output}/devenv-files.log")
+          );
+        in
+        appManifestExists
+        && depManifestExists
+        && transitiveManifestExists
+        &&
+          filesLog == [
+            "${output}/repos/transitive"
+            "${output}/repos/dep"
+            "${output}/repos/app"
+          ];
+      expected = true;
+    };
 
   localInputOverrides."test sync reports clearer repo catalog mismatch errors" = {
     expr =
@@ -841,8 +920,7 @@ in
         };
         stderr = builtins.readFile "${output}/stderr.txt";
       in
-      lib.hasInfix "manifest-owned repo catalog" stderr
-      && lib.hasInfix "agentroots.nuon" stderr;
+      lib.hasInfix "manifest-owned repo catalog" stderr && lib.hasInfix "agentroots.nuon" stderr;
     expected = true;
   };
 }
