@@ -6,6 +6,12 @@
   }
 
   inputs: {
+    ar_devenv_base: {
+      url: "github:Alb-O/ar_devenv_base"
+      flake: false
+      imports: [ "ar_devenv_base" ]
+      localRepo: "ar_devenv_base"
+    }
     docs-shared: {
       url: "github:Alb-O/ar_docs_env"
       flake: false
@@ -34,7 +40,7 @@
 
   layers: {
     shared-tooling: {
-      inputs: [ "nusurf" "agentroots" ]
+      inputs: [ "ar_devenv_base" "nusurf" "agentroots" ]
     }
     repo-empty: {
       extends: [ "shared-tooling" ]
@@ -50,6 +56,7 @@
       members: {
         nusurf: "repos/nusurf"
         agentroots: "repos/agentroots"
+        ar_devenv_base: "repos/ar_devenv_base"
         ar_docs_env: "repos/ar_docs_env"
         ar_rust_env: "repos/ar_rust_env"
       }

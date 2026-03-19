@@ -400,11 +400,14 @@ in
       in
       stripContext rendered.inputs.nusurf.url
       == stripContext "path:${output}/repos/nusurf"
+      && stripContext rendered.inputs.ar_devenv_base.url
+      == stripContext "path:${output}/repos/ar_devenv_base"
       && stripContext rendered.inputs.agentroots.url
       == stripContext "path:${output}/repos/agentroots"
       && stripContext rendered.inputs.ar_rust_env.url
       == stripContext "path:${output}/repos/ar_rust_env"
       && rendered.imports == [
+        "ar_devenv_base"
         "nusurf/nushell-plugin"
         "agentroots/tooling"
       ];
@@ -430,10 +433,13 @@ in
       in
       status.target_kind == "root"
       && status.mode == "written"
-      && status.local_repo_count == 3
+      && status.local_repo_count == 4
+      && stripContext rendered.inputs.ar_devenv_base.url
+      == stripContext "path:${output}/repos/ar_devenv_base"
       && stripContext rendered.inputs.agentroots.url
       == stripContext "path:${output}/repos/agentroots"
       && rendered.imports == [
+        "ar_devenv_base"
         "nusurf/nushell-plugin"
         "agentroots/tooling"
       ];
@@ -470,7 +476,7 @@ in
         status = readJson "${output}/status.json";
       in
       status.ok == true
-      && status.repo_count == 6
+      && status.repo_count == 7
       && status.group_count == 1
       && status.layer_count == 3
       && status.error_count == 0;
@@ -778,12 +784,13 @@ in
         status = readJson "${output}/status.json";
         resultRoots = builtins.map (result: stripContext result.repo_root) status.results;
       in
-      status.repo_count == 6
-      && status.success_count == 6
+      status.repo_count == 7
+      && status.success_count == 7
       && status.failure_count == 0
       && resultRoots == [
         "${output}/repos/agentroots"
         "${output}/repos/app"
+        "${output}/repos/ar_devenv_base"
         "${output}/repos/ar_docs_env"
         "${output}/repos/ar_rust_env"
         "${output}/repos/bootstrap_dep"
