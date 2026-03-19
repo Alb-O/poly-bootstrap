@@ -4,7 +4,7 @@ Polyrepo-specific bootstrap and runtime tooling for this workspace.
 
 Ownership:
 
-- `poly-bootstrap` owns bootstrap, root discovery, shell export reuse, `devenv-run`, and the `poly-bootstrap/tooling` consumer module.
+- `poly-bootstrap` owns bootstrap, shell export reuse, `devenv-run`, and the `poly-bootstrap/tooling` consumer module.
 - `agent-scripts` owns only generic reusable tools such as `committer`.
 
 Responsibilities:
@@ -19,6 +19,7 @@ Responsibilities:
 ## Public Interface
 
 - CLI: `bin/polyrepo.nu`
+- CLI: `bin/devenv-run.nu`
 - Wrapper entrypoint: `bootstrap`
 - Consumer module: `tooling/default.nix`
 
@@ -32,6 +33,12 @@ nu bin/polyrepo.nu bootstrap . --all-repos
 ```
 
 Use `--json` with `check`, `sync`, or `bootstrap` for machine-readable status.
+
+Nu module layout:
+
+- `nu/polyrepo/mod.nu`
+- `nu/polyrepo/common.nu`
+- `nu/polyrepo/devenv_run.nu`
 
 Consumer imports are explicit:
 
@@ -65,8 +72,9 @@ Key rules:
 - `devenv.local.yaml` must exist before `devenv` starts; bootstrap is the only supported writer.
 - `bootstrap --all-repos` targets only repos that expose `devenv.yaml` or `devenv.nix`.
 - The root workspace is first-class. `check .`, `sync .`, and `bootstrap .` work from the polyrepo root directly.
-- `.polyrepo-direnvrc` and `devenv-run` both source `sh/polyrepo.sh`.
-- `sh/devenv-run.sh` is the canonical command source packaged by `tooling/default.nix`.
+- `.polyrepo-direnvrc` is only a shell bridge for direnv and calls `repos/poly-bootstrap/bootstrap`.
+- `bin/devenv-run.nu` is the canonical command source packaged by `tooling/default.nix`.
+- shared helper logic lives in `nu/polyrepo/common.nu`.
 
 ## Testing
 

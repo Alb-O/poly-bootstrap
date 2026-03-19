@@ -719,11 +719,11 @@ in
           fixture = "recursive-polyrepo";
           repoPath = "repos/nusurf";
           beforeRun = ''
-            mkdir -p "$out/repos/poly-bootstrap/sh" "$out/repos/poly-bootstrap/tooling"
-            cat > "$out/repos/poly-bootstrap/sh/devenv-run.sh" <<'EOF'
+            mkdir -p "$out/repos/poly-bootstrap/bin" "$out/repos/poly-bootstrap/nu/polyrepo" "$out/repos/poly-bootstrap/tooling"
+            cat > "$out/repos/poly-bootstrap/bin/devenv-run.nu" <<'EOF'
             echo initial
             EOF
-            cat > "$out/repos/poly-bootstrap/sh/polyrepo.sh" <<'EOF'
+            cat > "$out/repos/poly-bootstrap/nu/polyrepo/common.nu" <<'EOF'
             echo helper
             EOF
             cat > "$out/repos/poly-bootstrap/tooling/default.nix" <<'EOF'
@@ -731,7 +731,7 @@ in
             EOF
           '';
           betweenRuns = ''
-            printf '\n# changed\n' >> "$out/repos/poly-bootstrap/sh/devenv-run.sh"
+            printf '\n# changed\n' >> "$out/repos/poly-bootstrap/bin/devenv-run.nu"
           '';
         };
         secondStatus = readJson "${output}/second-status.json";
@@ -763,7 +763,7 @@ in
           mkdir -p "$out"
           cp -R ${initialRun}/. "$out"/
           chmod -R u+w "$out"
-          printf '\n# changed\n' >> "$out/repos/poly-bootstrap/sh/devenv-run.sh"
+          printf '\n# changed\n' >> "$out/repos/poly-bootstrap/nu/polyrepo/devenv_run.nu"
         '';
         changedTooling = evalSharedTooling {
           root = changedSourceTree;
@@ -782,8 +782,8 @@ in
       != builtins.readFile "${changedRun}/report/devenv-run-path.txt"
       && builtins.readFile "${initialRun}/report/devenv-fake.txt" == "1\n"
       && builtins.readFile "${changedRun}/report/devenv-fake.txt" == "1\n"
-      && (builtins.length initialShellExportLog) == 2
-      && (builtins.length changedShellExportLog) == 4;
+      && (builtins.length initialShellExportLog) == 1
+      && (builtins.length changedShellExportLog) == 2;
     expected = true;
   };
 

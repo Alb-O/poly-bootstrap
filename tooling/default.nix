@@ -1,19 +1,87 @@
 { pkgs, lib, options, ... }:
 
 let
-  polyrepoHelperPath = toString ../sh/polyrepo.sh;
+  toolingSource = pkgs.runCommand "poly-bootstrap-tooling-source" { } ''
+    mkdir -p "$out/bin" "$out/nu/polyrepo"
+    cp ${../bin/devenv-run.nu} "$out/bin/devenv-run.nu"
+    cp ${../bin/polyrepo.nu} "$out/bin/polyrepo.nu"
+    cp ${../nu/runtime.nu} "$out/nu/runtime.nu"
+    cp ${../nu/support.nu} "$out/nu/support.nu"
+    cp ${../nu/polyrepo/common.nu} "$out/nu/polyrepo/common.nu"
+    cp ${../nu/polyrepo/devenv_run.nu} "$out/nu/polyrepo/devenv_run.nu"
+    cp ${../nu/polyrepo/mod.nu} "$out/nu/polyrepo/mod.nu"
+  '';
   devenvRun = pkgs.writeShellApplication {
     name = "devenv-run";
     runtimeInputs = [
+      pkgs.bash
       pkgs.coreutils
       pkgs.devenv
-      pkgs.findutils
-      pkgs.gawk
+      pkgs.nushell
     ];
-    text = builtins.replaceStrings
-      [ "@polyrepo_helper_path@" ]
-      [ polyrepoHelperPath ]
-      (builtins.readFile ../sh/devenv-run.sh);
+    text = ''
+      repo_root=$(pwd)
+      shell_command=""
+
+      usage() {
+        cat <<'EOF'
+Usage: devenv-run [-C repo_root] [--shell '<command>'] [--] <command> [args...]
+
+Run a command inside a repo's generated devenv environment without executing
+the repo's shellHook / enterShell tasks during steady-state reuse. On first use,
+it may materialize a shell export so later runs can stay side-effect-light.
+EOF
+      }
+
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          -C)
+            if [[ $# -lt 2 ]]; then
+              echo "Missing value for -C" >&2
+              exit 2
+            fi
+            repo_root=$2
+            shift 2
+            ;;
+          -s|--shell)
+            if [[ $# -lt 2 ]]; then
+              echo "Missing value for $1" >&2
+              exit 2
+            fi
+            shell_command=$2
+            shift 2
+            ;;
+          -h|--help)
+            usage
+            exit 0
+            ;;
+          --)
+            shift
+            break
+            ;;
+          *)
+            break
+            ;;
+        esac
+      done
+
+      if [[ -n "$shell_command" ]]; then
+        if [[ $# -gt 0 ]]; then
+          echo "--shell cannot be combined with a direct command invocation" >&2
+          exit 2
+        fi
+
+        exec ${lib.getExe pkgs.nushell} ${toolingSource}/bin/devenv-run.nu -C "$repo_root" --shell "$shell_command"
+      fi
+
+      if [[ $# -eq 0 ]]; then
+        exec ${lib.getExe pkgs.nushell} ${toolingSource}/bin/devenv-run.nu -C "$repo_root"
+      fi
+
+      quoted_command=$(printf '%q ' "$@")
+      quoted_command=''${quoted_command% }
+      exec ${lib.getExe pkgs.nushell} ${toolingSource}/bin/devenv-run.nu -C "$repo_root" --shell "$quoted_command"
+    '';
   };
 in
 {
