@@ -78,15 +78,15 @@ def bootstrapable-repo-records [
   | sort-by name
 }
 
-def bootstrap-one [target_root: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, dependency_repos: list<string>, dependency_results: list<record>, sync: record, bootstrap_tasks: list<record<task: string, ran: bool>>, lock_refreshed: bool, shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
-  let target = resolve-target $target_root
+def bootstrap-target [target: record<polyrepo_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>>]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, dependency_repos: list<string>, dependency_results: list<record>, sync: record, bootstrap_tasks: list<record<task: string, ran: bool>>, lock_refreshed: bool, shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
   let target_model = $target.model
   let dependency_names = if $target.target_kind == "root" {
     []
   } else {
+    let repo_name = ($target.target_name | default "__missing__")
     (
-      (bootstrap-order $target_model $target.target_name [] []).order
-      | where {|repo_name| $repo_name != $target.target_name }
+      (bootstrap-order $target_model $repo_name [] []).order
+      | where {|dependency_name| $dependency_name != $repo_name }
     )
   }
 
@@ -110,7 +110,8 @@ def bootstrap-one [target_root: path]: nothing -> record<target_root: path, targ
 
   let target_sync = sync $target.target_root
   let target_repo_entry = if $target.target_kind == "repo" {
-    $target_model.repos | get $target.target_name
+    let repo_name = ($target.target_name | default "__missing__")
+    $target_model.repos | get $repo_name
   } else {
     { bootstrapTasks: [] }
   }
@@ -147,10 +148,40 @@ def bootstrap-one [target_root: path]: nothing -> record<target_root: path, targ
 }
 
 export def bootstrap [target_path?: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, dependency_repos: list<string>, dependency_results: list<record>, sync: record, bootstrap_tasks: list<record<task: string, ran: bool>>, lock_refreshed: bool, shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
-  bootstrap-one ($target_path | default ".")
+  bootstrap-target (resolve-target ($target_path | default "."))
 }
 
-export def bootstrap-all [target_path?: path]: nothing -> record<repo_count: int, success_count: int, failure_count: int, results: list<record>> {
+def make-bootstrap-all-result [
+  repo_root: path
+  repo_name: string
+  ok: bool
+  status: any
+  error: any
+]: nothing -> record<repo_root: path, repo_name: string, ok: bool, status: oneof<record, nothing>, error: oneof<string, nothing>> {
+  {
+    repo_root: $repo_root
+    repo_name: $repo_name
+    ok: $ok
+    status: $status
+    error: $error
+  }
+}
+
+def make-bootstrap-summary [
+  bootstrap_targets: list<record<name: string, path: path, bootstrapTasks: list<string>, bootstrapDeps: list<string>>>
+  results: list<record<repo_root: path, repo_name: string, ok: bool, status: oneof<record, nothing>, error: oneof<string, nothing>>>
+]: nothing -> record<repo_count: int, success_count: int, failure_count: int, results: list<record<repo_root: path, repo_name: string, ok: bool, status: oneof<record, nothing>, error: oneof<string, nothing>>>> {
+  let failures = ($results | where ok == false)
+
+  {
+    repo_count: ($bootstrap_targets | length)
+    success_count: ($results | where ok == true | length)
+    failure_count: ($failures | length)
+    results: $results
+  }
+}
+
+export def bootstrap-all [target_path?: path]: nothing -> record<repo_count: int, success_count: int, failure_count: int, results: list<record<repo_root: path, repo_name: string, ok: bool, status: oneof<record, nothing>, error: oneof<string, nothing>>>> {
   let target = resolve-target ($target_path | default ".")
   let bootstrap_targets = bootstrapable-repo-records $target.model
 
@@ -158,31 +189,14 @@ export def bootstrap-all [target_path?: path]: nothing -> record<repo_count: int
     $bootstrap_targets
     | each {|repo|
         try {
-          {
-            repo_root: $repo.path
-            repo_name: $repo.name
-            ok: true
-            status: (bootstrap-one $repo.path)
-            error: null
-          }
+          make-bootstrap-all-result $repo.path $repo.name true (bootstrap-target (resolve-target $repo.path)) null
         } catch {|err|
-          {
-            repo_root: $repo.path
-            repo_name: $repo.name
-            ok: false
-            status: null
-            error: $err.msg
-          }
+          make-bootstrap-all-result $repo.path $repo.name false null $err.msg
         }
       }
   )
   let failures = ($results | where ok == false)
-  let summary = {
-    repo_count: ($bootstrap_targets | length)
-    success_count: ($results | where ok == true | length)
-    failure_count: ($failures | length)
-    results: $results
-  }
+  let summary = (make-bootstrap-summary $bootstrap_targets $results)
 
   if not ($failures | is-empty) {
     error make {

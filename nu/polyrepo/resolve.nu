@@ -41,27 +41,45 @@ def resolve-layer-spec [
 }
 
 export def resolve-target-layer-spec [
-  model: record
-  target_kind: string
-  target_name: any
+  target: record<model: record, target_kind: string, target_name: oneof<string, nothing>>
 ]: nothing -> record<inputs: list<string>, imports: list<string>> {
-  let layer_names = if $target_kind == "root" {
-    $model.root.layers
+  let layer_names = if $target.target_kind == "root" {
+    $target.model.root.layers
   } else {
-    let repo_entry = ($model.repos | get -o $target_name)
+    let repo_name = ($target.target_name | default "__missing__")
+    let repo_entry = ($target.model.repos | get -o $repo_name)
     if not (is-record $repo_entry) {
-      fail $"unknown repo '($target_name)'"
+      fail $"unknown repo '($repo_name)'"
     }
     $repo_entry.layers
   }
 
   $layer_names
   | reduce --fold { inputs: [], imports: [] } {|layer_name, resolved|
-      merge-layer-spec $resolved (resolve-layer-spec $model $layer_name [])
+      merge-layer-spec $resolved (resolve-layer-spec $target.model $layer_name [])
     }
 }
 
-export def validate-model [model: record]: nothing -> record {
+def make-validation-status [
+  model: record
+  errors: list<record<path: string, message: string>>
+]: nothing -> record<ok: bool, manifest_path: path, polyrepo_root: path, repo_count: int, group_count: int, layer_count: int, error_count: int, errors: list<record<path: string, message: string>>> {
+  let repo_names = ($model.repos | columns)
+  let layer_names = ($model.layers | columns)
+
+  {
+    ok: ($errors | is-empty)
+    manifest_path: $model.manifest_path
+    polyrepo_root: $model.polyrepo_root
+    repo_count: ($repo_names | length)
+    group_count: (($model.repoGroups | columns | length))
+    layer_count: ($layer_names | length)
+    error_count: ($errors | length)
+    errors: $errors
+  }
+}
+
+export def validate-model [model: record]: nothing -> record<ok: bool, manifest_path: path, polyrepo_root: path, repo_count: int, group_count: int, layer_count: int, error_count: int, errors: list<record<path: string, message: string>>> {
   mut errors = ($model.errors | default [])
   let input_names = ($model.inputs | columns)
   let layer_names = ($model.layers | columns)
@@ -142,16 +160,7 @@ export def validate-model [model: record]: nothing -> record {
     }
   }
 
-  {
-    ok: ($errors | is-empty)
-    manifest_path: $model.manifest_path
-    polyrepo_root: $model.polyrepo_root
-    repo_count: ($repo_names | length)
-    group_count: (($model.repoGroups | columns | length))
-    layer_count: ($layer_names | length)
-    error_count: ($errors | length)
-    errors: $errors
-  }
+  make-validation-status $model $errors
 }
 
 def repo-record-by-path [

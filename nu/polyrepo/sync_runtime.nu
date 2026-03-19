@@ -12,13 +12,11 @@ def selected-imports [imports_list: list<string> effective_input_names: list<str
 }
 
 def render-target-overrides [
-  model: record
-  target_kind: string
-  target_name: any
+  target: record<polyrepo_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>>
 ]: nothing -> record<overrides: record, imports: list<string>, local_repo_names: list<string>> {
-  let target_spec = resolve-target-layer-spec $model $target_kind $target_name
+  let target_spec = resolve-target-layer-spec $target
   let repo_paths = (
-    $model.repos
+    $target.model.repos
     | items {|repo_name, repo_entry| [$repo_name ($repo_entry.path | into string)] }
     | into record
   )
@@ -42,7 +40,7 @@ def render-target-overrides [
     }
 
     $visited_inputs = ($visited_inputs | append $input_name)
-    let input_entry = ($model.inputs | get -o $input_name)
+    let input_entry = ($target.model.inputs | get -o $input_name)
     if not (is-record $input_entry) {
       fail $"unknown input '($input_name)'"
     }
@@ -161,11 +159,12 @@ def lock-status [
   make-lock-status "clean"
 }
 
-export def sync [target_path?: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, output_path: path, mode: string, changed: bool, removed: bool, local_repo_names: list<string>, local_repo_roots: list<string>, local_repo_count: int, lock_status: record<status: string, clean: bool, input_name: oneof<string, nothing>>, lock_refresh_needed: bool> {
-  let target = resolve-target ($target_path | default ".")
+def sync-target [
+  target: record<polyrepo_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>>
+]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, output_path: path, mode: string, changed: bool, removed: bool, local_repo_names: list<string>, local_repo_roots: list<string>, local_repo_count: int, lock_status: record<status: string, clean: bool, input_name: oneof<string, nothing>>, lock_refresh_needed: bool> {
   let output_path = ($target.target_root | path join "devenv.local.yaml")
   let lock_path = ($target.target_root | path join "devenv.lock")
-  let rendered = render-target-overrides $target.model $target.target_kind $target.target_name
+  let rendered = render-target-overrides $target
   let overrides_text = render-overrides-text $rendered
 
   let existing_text = if ($output_path | path exists) {
@@ -211,4 +210,8 @@ export def sync [target_path?: path]: nothing -> record<target_root: path, targe
     lock_status: $lock_status_value
     lock_refresh_needed: (not $lock_status_value.clean)
   }
+}
+
+export def sync [target_path?: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, output_path: path, mode: string, changed: bool, removed: bool, local_repo_names: list<string>, local_repo_roots: list<string>, local_repo_count: int, lock_status: record<status: string, clean: bool, input_name: oneof<string, nothing>>, lock_refresh_needed: bool> {
+  sync-target (resolve-target ($target_path | default "."))
 }
