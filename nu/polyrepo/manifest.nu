@@ -66,11 +66,9 @@ def require-string [value: any field_label: string]: nothing -> string {
 }
 
 def optional-string [value: any field_label: string]: nothing -> oneof<string, nothing> {
-  if (is-nothing $value) {
-    return null
+  if not (is-nothing $value) {
+    require-string $value $field_label
   }
-
-  require-string $value $field_label
 }
 
 def expect-string-list [value: any field_label: string]: nothing -> list<string> {
@@ -159,11 +157,9 @@ export def manifest-path [polyrepo_root: path]: nothing -> path {
 }
 
 export def get-import-input-name [import_name: string]: nothing -> oneof<string, nothing> {
-  if ([ "path:" "/" "./" "../" ] | any {|prefix| $import_name | str starts-with $prefix }) {
-    return null
+  if not ([ "path:" "/" "./" "../" ] | any {|prefix| $import_name | str starts-with $prefix }) {
+    $import_name | split row "/" | first | into string
   }
-
-  $import_name | split row "/" | first | into string
 }
 
 def normalize-input-entry [input_name: string input_value: any manifest_label: string]: nothing -> record {

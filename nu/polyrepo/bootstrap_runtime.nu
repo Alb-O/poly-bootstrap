@@ -125,7 +125,7 @@ def bootstrap-one [target_root: path]: nothing -> record {
   {
     target_root: $target.target_root
     target_kind: $target.target_kind
-    target_name: ($target.target_name | default null)
+    target_name: $target.target_name
     dependency_repos: ($repo_results | each {|entry| $entry.repo_name })
     dependency_results: $repo_results
     sync: $target_sync

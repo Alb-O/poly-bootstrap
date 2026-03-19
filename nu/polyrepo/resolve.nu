@@ -110,7 +110,6 @@ export def validate-model [model: record]: nothing -> record {
 
     let layer_error = try {
       resolve-layer-spec $model $layer_name [] | ignore
-      null
     } catch {|err|
       $err.msg
     }
@@ -156,13 +155,11 @@ def repo-record-by-path [model: record repo_root: path]: nothing -> oneof<record
   )
 
   let match = ($matches | get -o 0)
-  if not (is-record $match) {
-    return null
-  }
-
-  {
-    name: $match.repo_name
-    entry: $match.repo_entry
+  if (is-record $match) {
+    {
+      name: $match.repo_name
+      entry: $match.repo_entry
+    }
   }
 }
 

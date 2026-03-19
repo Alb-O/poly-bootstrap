@@ -14,11 +14,9 @@ export def latest-shell-export [repo_root: path]: nothing -> oneof<path, nothing
     | sort-by modified
   )
 
-  if ($shell_exports | is-empty) {
-    return null
+  if ($shell_exports | is-not-empty) {
+    $shell_exports | last | get path
   }
-
-  $shell_exports | last | get path
 }
 
 export def shell-export-meta-path [repo_root: path]: nothing -> path {
@@ -158,7 +156,7 @@ export def read-shell-export-meta [repo_root: path]: nothing -> record {
     ok: true
     export_path: $export_path
     fingerprint: $fingerprint
-    created_at: ($meta | get -o POLYREPO_SHELL_EXPORT_CREATED_AT | default null)
+    created_at: $meta.POLYREPO_SHELL_EXPORT_CREATED_AT?
   }
 }
 

@@ -92,7 +92,7 @@ def make-lock-status [status: string input_name?: any]: nothing -> record {
   {
     status: $status
     clean: ($status == "clean")
-    input_name: ($input_name | default null)
+    input_name: $input_name
   }
 }
 
@@ -102,7 +102,7 @@ def lock-status [output_path: path lock_path: path]: nothing -> record {
   }
 
   let local_doc = parse-yaml-mapping $output_path (open --raw $output_path)
-  let desired_inputs = ($local_doc | get -o inputs | default {})
+  let desired_inputs = ($local_doc.inputs? | default {})
 
   if not (is-record $desired_inputs) {
     fail $"expected `inputs` to be a mapping in ($output_path)"
@@ -121,14 +121,12 @@ def lock-status [output_path: path lock_path: path]: nothing -> record {
   } catch {
     fail $"expected valid JSON in ($lock_path)"
   }
-  let root_name = ($lock_doc | get -o root)
-  let nodes = ($lock_doc | get -o nodes | default {})
+  let root_name = $lock_doc.root?
+  let nodes = ($lock_doc.nodes? | default {})
   let root_node = if (is-string $root_name) and ($root_name in ($nodes | columns)) {
     $nodes | get $root_name
-  } else {
-    {}
   }
-  let root_inputs = ($root_node | get -o inputs | default {})
+  let root_inputs = ($root_node.inputs? | default {})
 
   for input_name in ($desired_inputs | columns | sort) {
     if not ($input_name in ($root_inputs | columns)) {
@@ -136,14 +134,12 @@ def lock-status [output_path: path lock_path: path]: nothing -> record {
     }
 
     let input_spec = ($desired_inputs | get $input_name)
-    let url = ($input_spec | get -o url)
+    let url = $input_spec.url?
     let locked_name = ($root_inputs | get $input_name)
     let locked_node = if (is-string $locked_name) and ($locked_name in ($nodes | columns)) {
       $nodes | get $locked_name
-    } else {
-      {}
     }
-    let locked_original = ($locked_node | get -o original)
+    let locked_original = $locked_node.original?
 
     if (is-string $url) and (is-string $locked_original) and ($locked_original != $url) {
       return (make-lock-status "stale-root-input" $input_name)
@@ -192,7 +188,7 @@ export def sync [target_path?: path]: nothing -> record {
   {
     target_root: $target.target_root
     target_kind: $target.target_kind
-    target_name: ($target.target_name | default null)
+    target_name: $target.target_name
     output_path: $output_path
     mode: $mode
     changed: ($mode != "unchanged")
