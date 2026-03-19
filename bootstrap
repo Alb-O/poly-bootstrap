@@ -2,12 +2,12 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-nu_script="$script_dir/bin/polyrepo.nu"
+nu_script="$script_dir/bin/agentroots.nu"
 
 if command -v nu >/dev/null 2>&1; then
   exec nu "$nu_script" bootstrap "$@"
 fi
 
 exec nix --extra-experimental-features 'nix-command flakes' \
-  shell "path:${script_dir}/nix/flake-bootstrap#nushell" \
+  shell "path:${script_dir}/nix/flake_bootstrap#nushell" \
   -c nu "$nu_script" bootstrap "$@"

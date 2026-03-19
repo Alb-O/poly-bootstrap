@@ -22,8 +22,8 @@ export def is-non-empty-string [value: any]: nothing -> bool {
   (is-string $value) and ($value | is-not-empty)
 }
 
-export def polyrepo-manifest-basename []: nothing -> string {
-  "polyrepo.nuon"
+export def agentroots_manifest_basename []: nothing -> string {
+  "agentroots.nuon"
 }
 
 export def fail-on-overlap [first_names: list<string> second_names: list<string> first_label: string second_label: string]: nothing -> oneof<nothing, error> {

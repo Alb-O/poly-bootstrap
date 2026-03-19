@@ -20,7 +20,7 @@ export def latest-shell-export [repo_root: path]: nothing -> oneof<path, nothing
 }
 
 export def shell-export-meta-path [repo_root: path]: nothing -> path {
-  ($repo_root | path join ".devenv" | path join "polyrepo-shell-export.meta")
+  ($repo_root | path join ".devenv" | path join "ar_shell_export.meta")
 }
 
 export def shell-export-file-stat-line [label: string path_value: path]: nothing -> string {
@@ -83,19 +83,19 @@ export def shell-export-fingerprint [repo_root: path]: nothing -> string {
       $lines = ($lines | append (shell-export-file-stat-line $"input:($input_entry.name):($rel_path)" ($input_entry.repo_root | path join $rel_path)))
     }
 
-    if $input_entry.name == "poly-bootstrap" {
+    if $input_entry.name == "agentroots" {
       for rel_path in [
         "bin/devenv-run.nu"
-        "bin/polyrepo.nu"
+        "bin/agentroots.nu"
         "nu/support.nu"
-        "nu/polyrepo/bootstrap_runtime.nu"
-        "nu/polyrepo/check_runtime.nu"
-        "nu/polyrepo/common.nu"
-        "nu/polyrepo/devenv_run.nu"
-        "nu/polyrepo/manifest.nu"
-        "nu/polyrepo/mod.nu"
-        "nu/polyrepo/resolve.nu"
-        "nu/polyrepo/sync_runtime.nu"
+        "nu/agentroots/bootstrap_runtime.nu"
+        "nu/agentroots/check_runtime.nu"
+        "nu/agentroots/common.nu"
+        "nu/agentroots/devenv_run.nu"
+        "nu/agentroots/manifest.nu"
+        "nu/agentroots/mod.nu"
+        "nu/agentroots/resolve.nu"
+        "nu/agentroots/sync_runtime.nu"
         "tooling/default.nix"
         "tooling/devenv.nix"
       ] {
@@ -138,15 +138,15 @@ export def read-shell-export-meta [repo_root: path]: nothing -> record {
     }
   }
 
-  if (($meta | get -o POLYREPO_SHELL_EXPORT_VERSION) != "1") {
+  if (($meta | get -o AR_SHELL_EXPORT_VERSION) != "1") {
     return {
       ok: false
       reason: "meta_parse_error"
     }
   }
 
-  let export_path = ($meta | get -o POLYREPO_SHELL_EXPORT_PATH)
-  let fingerprint = ($meta | get -o POLYREPO_SHELL_EXPORT_FINGERPRINT)
+  let export_path = ($meta | get -o AR_SHELL_EXPORT_PATH)
+  let fingerprint = ($meta | get -o AR_SHELL_EXPORT_FINGERPRINT)
   if not (is-non-empty-string $export_path) or not (is-non-empty-string $fingerprint) {
     return {
       ok: false
@@ -158,17 +158,17 @@ export def read-shell-export-meta [repo_root: path]: nothing -> record {
     ok: true
     export_path: $export_path
     fingerprint: $fingerprint
-    created_at: $meta.POLYREPO_SHELL_EXPORT_CREATED_AT?
+    created_at: $meta.AR_SHELL_EXPORT_CREATED_AT?
   }
 }
 
 export def write-shell-export-meta [repo_root: path shell_export_path: path fingerprint: string]: nothing -> nothing {
   let meta_path = shell-export-meta-path $repo_root
   let meta_text = [
-    "POLYREPO_SHELL_EXPORT_VERSION=1"
-    $"POLYREPO_SHELL_EXPORT_PATH=($shell_export_path)"
-    $"POLYREPO_SHELL_EXPORT_FINGERPRINT=($fingerprint)"
-    $"POLYREPO_SHELL_EXPORT_CREATED_AT=((date now) | format date '%Y-%m-%dT%H:%M:%S%:z')"
+    "AR_SHELL_EXPORT_VERSION=1"
+    $"AR_SHELL_EXPORT_PATH=($shell_export_path)"
+    $"AR_SHELL_EXPORT_FINGERPRINT=($fingerprint)"
+    $"AR_SHELL_EXPORT_CREATED_AT=((date now) | format date '%Y-%m-%dT%H:%M:%S%:z')"
   ] | str join "\n"
 
   $meta_text | save --force $meta_path
@@ -250,7 +250,7 @@ export def run-in-shell-export [
       "set -euo pipefail"
       'export PS1=""'
       $prefix_text
-      'exec bash -lc "$POLYREPO_SHELL_COMMAND"'
+      'exec bash -lc "$AR_SHELL_COMMAND"'
     ] | str join "\n"
   } else {
     [
@@ -263,7 +263,7 @@ export def run-in-shell-export [
   }
 
   if (is-string $shell_command) {
-    with-env { POLYREPO_SHELL_COMMAND: $shell_command } {
+    with-env { AR_SHELL_COMMAND: $shell_command } {
       $script_text | ^bash -s
     }
   } else {

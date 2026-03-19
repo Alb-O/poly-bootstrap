@@ -12,7 +12,7 @@ def selected-imports [imports_list: list<string> effective_input_names: list<str
 }
 
 def render-target-overrides [
-  target: record<polyrepo_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>>
+  target: record<agentroots_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>>
 ]: nothing -> record<overrides: record, imports: list<string>, local_repo_names: list<string>> {
   let target_spec = resolve-target-layer-spec $target
   let repo_paths = (
@@ -160,7 +160,7 @@ def lock-status [
 }
 
 def sync-target [
-  target: record<polyrepo_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>>
+  target: record<agentroots_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>>
 ]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, output_path: path, mode: string, changed: bool, removed: bool, local_repo_names: list<string>, local_repo_roots: list<string>, local_repo_count: int, lock_status: record<status: string, clean: bool, input_name: oneof<string, nothing>>, lock_refresh_needed: bool> {
   let output_path = ($target.target_root | path join "devenv.local.yaml")
   let lock_path = ($target.target_root | path join "devenv.lock")

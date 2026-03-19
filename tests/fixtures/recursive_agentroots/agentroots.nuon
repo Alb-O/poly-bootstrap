@@ -7,39 +7,39 @@
 
   inputs: {
     docs-shared: {
-      url: "github:Alb-O/poly-docs-env"
+      url: "github:Alb-O/ar_docs_env"
       flake: false
       imports: [ "docs-shared/subdir" ]
-      localRepo: "poly-docs-env"
+      localRepo: "ar_docs_env"
     }
     nusurf: {
       url: "github:Alb-O/nusurf"
       flake: false
       imports: [ "nusurf/nushell-plugin" ]
-      requiresInputs: [ "poly-rust-env" ]
+      requiresInputs: [ "ar_rust_env" ]
       localRepo: "nusurf"
     }
-    poly-bootstrap: {
-      url: "github:Alb-O/poly-bootstrap"
+    agentroots: {
+      url: "github:Alb-O/agentroots"
       flake: false
-      imports: [ "poly-bootstrap/tooling" ]
-      localRepo: "poly-bootstrap"
+      imports: [ "agentroots/tooling" ]
+      localRepo: "agentroots"
     }
-    poly-rust-env: {
-      url: "github:Alb-O/poly-rust-env"
+    ar_rust_env: {
+      url: "github:Alb-O/ar_rust_env"
       flake: false
-      localRepo: "poly-rust-env"
+      localRepo: "ar_rust_env"
     }
   }
 
   layers: {
     shared-tooling: {
-      inputs: [ "nusurf" "poly-bootstrap" ]
+      inputs: [ "nusurf" "agentroots" ]
     }
     repo-empty: {
       extends: [ "shared-tooling" ]
     }
-    repo-agent-scripts: {
+    repo_bootstrap_dep: {
       extends: [ "shared-tooling" ]
       inputs: [ "docs-shared" ]
     }
@@ -49,24 +49,24 @@
     dependency-repos: {
       members: {
         nusurf: "repos/nusurf"
-        poly-bootstrap: "repos/poly-bootstrap"
-        poly-docs-env: "repos/poly-docs-env"
-        poly-rust-env: "repos/poly-rust-env"
+        agentroots: "repos/agentroots"
+        ar_docs_env: "repos/ar_docs_env"
+        ar_rust_env: "repos/ar_rust_env"
       }
       layers: [ "repo-empty" ]
     }
   }
 
   repos: {
-    agent-scripts: {
-      path: "repos/agent-scripts"
-      layers: [ "repo-agent-scripts" ]
+    bootstrap_dep: {
+      path: "repos/bootstrap_dep"
+      layers: [ "repo_bootstrap_dep" ]
       bootstrapTasks: [ "devenv:files" ]
     }
     app: {
       path: "repos/app"
       layers: [ "repo-empty" ]
-      bootstrapDeps: [ "agent-scripts" ]
+      bootstrapDeps: [ "bootstrap_dep" ]
       bootstrapTasks: [ "devenv:files" ]
     }
   }

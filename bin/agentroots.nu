@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 
-use ../nu/polyrepo/mod.nu [bootstrap bootstrap-all check sync]
+use ../nu/agentroots/mod.nu [bootstrap bootstrap-all check sync]
 
 def render-json [value: any emit_json: bool]: nothing -> oneof<string, nothing> {
   if $emit_json {

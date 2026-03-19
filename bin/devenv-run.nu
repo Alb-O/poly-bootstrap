@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 
-use ../nu/polyrepo/devenv_run.nu *
+use ../nu/agentroots/devenv_run.nu *
 use ../nu/support.nu [is-nothing is-string]
 
 def main [

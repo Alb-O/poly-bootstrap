@@ -1,10 +1,10 @@
 inputs:
-  poly-bootstrap:
-    url: github:Alb-O/poly-bootstrap
+  agentroots:
+    url: github:Alb-O/agentroots
     flake: false
   remote-only:
     url: github:Alb-O/not-local
     flake: false
 imports:
-  - poly-bootstrap/tooling
+  - agentroots/tooling
   - remote-only

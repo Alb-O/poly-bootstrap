@@ -6,15 +6,15 @@
   }
 
   inputs: {
-    agent-scripts: {
-      url: "github:Alb-O/agent-scripts"
+    remote_tools: {
+      url: "github:Alb-O/remote_tools"
       flake: false
     }
   }
 
   layers: {
     remote-only: {
-      inputs: [ "agent-scripts" ]
+      inputs: [ "remote_tools" ]
     }
   }
 

@@ -1,5 +1,5 @@
 {
-  description = "Bootstrap Nushell environment for poly-bootstrap";
+  description = "Bootstrap Nushell environment for AgentRoots";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";

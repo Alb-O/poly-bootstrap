@@ -1,5 +1,5 @@
 export def main [] {
-  help polyrepo
+  help agentroots
 }
 
 export use bootstrap_runtime.nu [bootstrap bootstrap-all]

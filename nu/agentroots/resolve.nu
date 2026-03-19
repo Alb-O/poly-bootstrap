@@ -2,7 +2,7 @@ use ../support.nu [fail is-record is-string]
 use manifest.nu [
   append-error
   describe-repo-list
-  find-polyrepo-root
+  find_agentroots_root
   find-repo-root
   get-import-input-name
   load-manifest
@@ -63,14 +63,14 @@ export def resolve-target-layer-spec [
 def make-validation-status [
   model: record
   errors: list<record<path: string, message: string>>
-]: nothing -> record<ok: bool, manifest_path: path, polyrepo_root: path, repo_count: int, group_count: int, layer_count: int, error_count: int, errors: list<record<path: string, message: string>>> {
+]: nothing -> record<ok: bool, manifest_path: path, agentroots_root: path, repo_count: int, group_count: int, layer_count: int, error_count: int, errors: list<record<path: string, message: string>>> {
   let repo_names = ($model.repos | columns)
   let layer_names = ($model.layers | columns)
 
   {
     ok: ($errors | is-empty)
     manifest_path: $model.manifest_path
-    polyrepo_root: $model.polyrepo_root
+    agentroots_root: $model.agentroots_root
     repo_count: ($repo_names | length)
     group_count: (($model.repoGroups | columns | length))
     layer_count: ($layer_names | length)
@@ -79,7 +79,7 @@ def make-validation-status [
   }
 }
 
-export def validate-model [model: record]: nothing -> record<ok: bool, manifest_path: path, polyrepo_root: path, repo_count: int, group_count: int, layer_count: int, error_count: int, errors: list<record<path: string, message: string>>> {
+export def validate-model [model: record]: nothing -> record<ok: bool, manifest_path: path, agentroots_root: path, repo_count: int, group_count: int, layer_count: int, error_count: int, errors: list<record<path: string, message: string>>> {
   mut errors = ($model.errors | default [])
   let input_names = ($model.inputs | columns)
   let layer_names = ($model.layers | columns)
@@ -198,24 +198,24 @@ export def require-valid-model [model: record]: nothing -> record {
   $model
 }
 
-export def resolve-target [target_path: path]: nothing -> record<polyrepo_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>> {
+export def resolve-target [target_path: path]: nothing -> record<agentroots_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>> {
   let start_path = (resolve-repo-path (pwd) $target_path)
   let repo_root = (find-repo-root $start_path | default $start_path)
-  let polyrepo_root = (find-polyrepo-root $start_path)
+  let agentroots_root = (find_agentroots_root $start_path)
 
-  if not (is-string $polyrepo_root) {
-    fail $"polyrepo root could not be inferred from ($start_path)"
+  if not (is-string $agentroots_root) {
+    fail $"AgentRoots root could not be inferred from ($start_path)"
   }
 
-  let model = require-valid-model (load-manifest $polyrepo_root)
-  let normalized_polyrepo_root = ($polyrepo_root | path expand --no-symlink)
+  let model = require-valid-model (load-manifest $agentroots_root)
+  let normalized_agentroots_root = ($agentroots_root | path expand --no-symlink)
   let normalized_repo_root = ($repo_root | path expand --no-symlink)
 
-  if $normalized_repo_root == $normalized_polyrepo_root {
+  if $normalized_repo_root == $normalized_agentroots_root {
     return {
-      polyrepo_root: $normalized_polyrepo_root
+      agentroots_root: $normalized_agentroots_root
       model: $model
-      target_root: $normalized_polyrepo_root
+      target_root: $normalized_agentroots_root
       target_kind: "root"
       target_name: null
     }
@@ -224,12 +224,12 @@ export def resolve-target [target_path: path]: nothing -> record<polyrepo_root: 
   let repo_record = repo-record-by-path $model $normalized_repo_root
   if not (is-record $repo_record) {
     let repo_names = ($model.repos | columns)
-    let catalog_path = (manifest-path $normalized_polyrepo_root)
+    let catalog_path = (manifest-path $normalized_agentroots_root)
     fail $"expected repo root ($normalized_repo_root) to be present in the manifest-owned repo catalog at ($catalog_path); available repo names: (describe-repo-list $repo_names)"
   }
 
   {
-    polyrepo_root: $normalized_polyrepo_root
+    agentroots_root: $normalized_agentroots_root
     model: $model
     target_root: $normalized_repo_root
     target_kind: "repo"

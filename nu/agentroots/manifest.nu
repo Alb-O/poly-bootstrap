@@ -4,7 +4,7 @@ use ../support.nu [
   is-non-empty-string
   is-nothing
   is-record
-  polyrepo-manifest-basename
+  agentroots_manifest_basename
 ]
 
 def normalize-structured-value [value: any]: nothing -> any {
@@ -152,8 +152,8 @@ export def find-repo-root [start_path: path]: nothing -> oneof<path, nothing> {
   }
 }
 
-export def manifest-path [polyrepo_root: path]: nothing -> path {
-  ($polyrepo_root | path join (polyrepo-manifest-basename))
+export def manifest-path [agentroots_root: path]: nothing -> path {
+  ($agentroots_root | path join (agentroots_manifest_basename))
 }
 
 export def get-import-input-name [import_name: string]: nothing -> oneof<string, nothing> {
@@ -250,7 +250,7 @@ export def describe-repo-list [repo_names: list<string>]: nothing -> string {
   }
 }
 
-def flatten-repos [polyrepo_root: path repo_dirs_root: path repo_groups: record repos_catalog: record errors: list<record>]: nothing -> record {
+def flatten-repos [agentroots_root: path repo_dirs_root: path repo_groups: record repos_catalog: record errors: list<record>]: nothing -> record {
   mut errors = $errors
   mut flattened = {}
 
@@ -291,7 +291,7 @@ def flatten-repos [polyrepo_root: path repo_dirs_root: path repo_groups: record 
   mut resolved_records = []
   for repo_name in ($flattened | columns | sort) {
     let repo_entry = ($flattened | get $repo_name)
-    let resolved_path = resolve-repo-path $polyrepo_root ($repo_entry | get path)
+    let resolved_path = resolve-repo-path $agentroots_root ($repo_entry | get path)
     let relative_path = maybe-relativize $resolved_path $repo_dirs_root
 
     if (is-nothing $relative_path) {
@@ -347,19 +347,19 @@ def flatten-repos [polyrepo_root: path repo_dirs_root: path repo_groups: record 
   }
 }
 
-export def load-manifest [polyrepo_root: path]: nothing -> record {
-  let polyrepo_root = ($polyrepo_root | path expand --no-symlink)
-  let manifest_path = manifest-path $polyrepo_root
+export def load-manifest [agentroots_root: path]: nothing -> record {
+  let agentroots_root = ($agentroots_root | path expand --no-symlink)
+  let manifest_path = manifest-path $agentroots_root
 
   if not ($manifest_path | path exists) {
-    fail $"expected (polyrepo-manifest-basename) at ($polyrepo_root)"
+    fail $"expected (agentroots_manifest_basename) at ($agentroots_root)"
   }
 
   let manifest_text = open --raw $manifest_path
-  let manifest_label = $"polyrepo manifest '($manifest_path)'"
+  let manifest_label = $"agentroots manifest '($manifest_path)'"
   let manifest = parse-nuon-mapping $manifest_label $manifest_text
   let repo_dirs_path = require-string ($manifest | get -o repoDirsPath) $"repoDirsPath in ($manifest_label)"
-  let repo_dirs_root = resolve-repo-path $polyrepo_root $repo_dirs_path
+  let repo_dirs_root = resolve-repo-path $agentroots_root $repo_dirs_path
   let root_entry = ($manifest | get -o root | default {})
 
   if not (is-record $root_entry) {
@@ -416,12 +416,12 @@ export def load-manifest [polyrepo_root: path]: nothing -> record {
     | into record
   )
 
-  let flattened = flatten-repos $polyrepo_root $repo_dirs_root $repo_groups $repos_catalog []
+  let flattened = flatten-repos $agentroots_root $repo_dirs_root $repo_groups $repos_catalog []
 
   {
     manifest_path: $manifest_path
     manifest_text: $manifest_text
-    polyrepo_root: $polyrepo_root
+    agentroots_root: $agentroots_root
     repoDirsPath: $repo_dirs_path
     repoDirsRoot: $repo_dirs_root
     root: {
@@ -435,7 +435,7 @@ export def load-manifest [polyrepo_root: path]: nothing -> record {
   }
 }
 
-export def find-polyrepo-root [start_path: path]: nothing -> oneof<path, nothing> {
+export def find_agentroots_root [start_path: path]: nothing -> oneof<path, nothing> {
   let start_path = ($start_path | path expand --no-symlink)
   let repo_root = (find-repo-root $start_path | default $start_path)
   mut current = $repo_root

@@ -78,7 +78,7 @@ def bootstrapable-repo-records [
   | sort-by name
 }
 
-def bootstrap-target [target: record<polyrepo_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>>]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, dependency_repos: list<string>, dependency_results: list<record>, sync: record, bootstrap_tasks: list<record<task: string, ran: bool>>, lock_refreshed: bool, shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
+def bootstrap-target [target: record<agentroots_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>>]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, dependency_repos: list<string>, dependency_results: list<record>, sync: record, bootstrap_tasks: list<record<task: string, ran: bool>>, lock_refreshed: bool, shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
   let target_model = $target.model
   let dependency_names = if $target.target_kind == "root" {
     []

@@ -1,6 +1,6 @@
 inputs:
   docs-shared:
-    url: github:Alb-O/poly-docs-env
+    url: github:Alb-O/ar_docs_env
     flake: false
   missing-local:
     url: github:Alb-O/not-present
