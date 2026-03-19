@@ -33,7 +33,9 @@ export def shell-export-file-stat-line [label: string path_value: path]: nothing
   $"($label)\t1\t($entry.size)\t($modified)"
 }
 
-export def shell-export-local-input-repos [repo_root: path]: nothing -> list<record> {
+export def shell-export-local-input-repos [
+  repo_root: path
+]: nothing -> list<record<name: string, repo_root: string>> {
   let local_yaml_path = ($repo_root | path join "devenv.local.yaml")
   if not ($local_yaml_path | path exists) {
     return []
@@ -52,7 +54,7 @@ export def shell-export-local-input-repos [repo_root: path]: nothing -> list<rec
 
   $local_inputs
   | items {|input_name, input_spec|
-      let url = ($input_spec | get -o url)
+      let url = $input_spec.url?
       if (is-string $url) and ($url | str starts-with "path:") {
         {
           name: $input_name
@@ -179,7 +181,10 @@ export def materialize-shell-export [repo_root: path]: nothing -> nothing {
   }
 }
 
-export def ensure-shell-export [repo_root: path refresh_requested: bool]: nothing -> record {
+export def ensure-shell-export [
+  repo_root: path
+  refresh_requested: bool
+]: nothing -> record<shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
   let existing_export = (latest-shell-export $repo_root)
   let refresh_reason = if $refresh_requested {
     "forced_refresh"

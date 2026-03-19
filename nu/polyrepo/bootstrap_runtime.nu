@@ -4,7 +4,10 @@ use manifest.nu [is-bootstrap-target]
 use resolve.nu [resolve-target]
 use sync_runtime.nu [sync]
 
-def run-bootstrap-task [repo_root: path task_name: string]: nothing -> record {
+def run-bootstrap-task [
+  repo_root: path
+  task_name: string
+]: nothing -> record<task: string, ran: bool> {
   match $task_name {
     "devenv:files" => {
       do {
@@ -22,7 +25,12 @@ def run-bootstrap-task [repo_root: path task_name: string]: nothing -> record {
   }
 }
 
-def bootstrap-order [model: record repo_name: string stack: list<string> visited: list<string>]: nothing -> record {
+def bootstrap-order [
+  model: record
+  repo_name: string
+  stack: list<string>
+  visited: list<string>
+]: nothing -> record<order: list<string>, visited: list<string>> {
   if $repo_name in $stack {
     fail $"cyclic bootstrap dependency chain: (($stack | append $repo_name) | str join ' -> ')"
   }
@@ -54,22 +62,23 @@ def bootstrap-order [model: record repo_name: string stack: list<string> visited
   }
 }
 
-def bootstrapable-repo-records [model: record]: nothing -> list<record> {
+def bootstrapable-repo-records [
+  model: record
+]: nothing -> list<record<name: string, path: path, bootstrapTasks: list<string>, bootstrapDeps: list<string>>> {
   $model.repos
-  | transpose repo_name repo_entry
-  | each {|entry|
+  | items {|repo_name, repo_entry|
       {
-        name: $entry.repo_name
-        path: ($entry.repo_entry | get path)
-        bootstrapTasks: ($entry.repo_entry | get bootstrapTasks)
-        bootstrapDeps: ($entry.repo_entry | get bootstrapDeps)
+        name: $repo_name
+        path: $repo_entry.path
+        bootstrapTasks: $repo_entry.bootstrapTasks
+        bootstrapDeps: $repo_entry.bootstrapDeps
       }
     }
   | where {|entry| is-bootstrap-target $entry.path }
   | sort-by name
 }
 
-def bootstrap-one [target_root: path]: nothing -> record {
+def bootstrap-one [target_root: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, dependency_repos: list<string>, dependency_results: list<record>, sync: record, bootstrap_tasks: list<record<task: string, ran: bool>>, lock_refreshed: bool, shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
   let target = resolve-target $target_root
   let target_model = $target.model
   let dependency_names = if $target.target_kind == "root" {
@@ -137,11 +146,11 @@ def bootstrap-one [target_root: path]: nothing -> record {
   }
 }
 
-export def bootstrap [target_path?: path]: nothing -> record {
+export def bootstrap [target_path?: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, dependency_repos: list<string>, dependency_results: list<record>, sync: record, bootstrap_tasks: list<record<task: string, ran: bool>>, lock_refreshed: bool, shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
   bootstrap-one ($target_path | default ".")
 }
 
-export def bootstrap-all [target_path?: path]: nothing -> record {
+export def bootstrap-all [target_path?: path]: nothing -> record<repo_count: int, success_count: int, failure_count: int, results: list<record>> {
   let target = resolve-target ($target_path | default ".")
   let bootstrap_targets = bootstrapable-repo-records $target.model
 

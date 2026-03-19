@@ -11,7 +11,11 @@ use manifest.nu [
   resolve-repo-path
 ]
 
-def resolve-layer-spec [model: record layer_name: string stack: list<string>]: nothing -> record {
+def resolve-layer-spec [
+  model: record
+  layer_name: string
+  stack: list<string>
+]: nothing -> record<inputs: list<string>, imports: list<string>> {
   if $layer_name in $stack {
     fail $"cyclic layer chain: (($stack | append $layer_name) | str join ' -> ')"
   }
@@ -36,7 +40,11 @@ def resolve-layer-spec [model: record layer_name: string stack: list<string>]: n
   }
 }
 
-export def resolve-target-layer-spec [model: record target_kind: string target_name: any]: nothing -> record {
+export def resolve-target-layer-spec [
+  model: record
+  target_kind: string
+  target_name: any
+]: nothing -> record<inputs: list<string>, imports: list<string>> {
   let layer_names = if $target_kind == "root" {
     $model.root.layers
   } else {
@@ -146,7 +154,10 @@ export def validate-model [model: record]: nothing -> record {
   }
 }
 
-def repo-record-by-path [model: record repo_root: path]: nothing -> oneof<record, nothing> {
+def repo-record-by-path [
+  model: record
+  repo_root: path
+]: nothing -> oneof<record<name: string, entry: record>, nothing> {
   let repo_root = ($repo_root | path expand --no-symlink | into string)
   let matches = (
     $model.repos
@@ -178,7 +189,7 @@ export def require-valid-model [model: record]: nothing -> record {
   $model
 }
 
-export def resolve-target [target_path: path]: nothing -> record {
+export def resolve-target [target_path: path]: nothing -> record<polyrepo_root: path, model: record, target_root: path, target_kind: string, target_name: oneof<string, nothing>> {
   let start_path = (resolve-repo-path (pwd) $target_path)
   let repo_root = (find-repo-root $start_path | default $start_path)
   let polyrepo_root = (find-polyrepo-root $start_path)

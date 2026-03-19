@@ -11,11 +11,15 @@ def selected-imports [imports_list: list<string> effective_input_names: list<str
   | uniq
 }
 
-def render-target-overrides [model: record target_kind: string target_name: any]: nothing -> record {
+def render-target-overrides [
+  model: record
+  target_kind: string
+  target_name: any
+]: nothing -> record<overrides: record, imports: list<string>, local_repo_names: list<string>> {
   let target_spec = resolve-target-layer-spec $model $target_kind $target_name
   let repo_paths = (
     $model.repos
-    | items {|repo_name, repo_entry| [$repo_name (($repo_entry | get path) | into string)] }
+    | items {|repo_name, repo_entry| [$repo_name ($repo_entry.path | into string)] }
     | into record
   )
 
@@ -43,7 +47,7 @@ def render-target-overrides [model: record target_kind: string target_name: any]
       fail $"unknown input '($input_name)'"
     }
 
-    let local_repo = ($input_entry | get localRepo)
+    let local_repo = $input_entry.localRepo
     if not (is-string $local_repo) {
       continue
     }
@@ -55,10 +59,10 @@ def render-target-overrides [model: record target_kind: string target_name: any]
 
     $local_repo_names = ($local_repo_names | append $local_repo)
     $overrides = ($overrides | merge {
-      $input_name: ((($input_entry | get spec) | merge { url: $"path:($repo_path)" }))
+      $input_name: ($input_entry.spec | merge { url: $"path:($repo_path)" })
     })
-    $collected_input_imports = ($collected_input_imports | append ($input_entry | get imports))
-    $pending_inputs = ($pending_inputs | append ($input_entry | get requiresInputs))
+    $collected_input_imports = ($collected_input_imports | append $input_entry.imports)
+    $pending_inputs = ($pending_inputs | append $input_entry.requiresInputs)
   }
 
   let effective_input_names = ($overrides | columns | uniq)
@@ -71,7 +75,9 @@ def render-target-overrides [model: record target_kind: string target_name: any]
   }
 }
 
-def render-overrides-text [rendered: record]: nothing -> string {
+def render-overrides-text [
+  rendered: record<overrides: record, imports: list<string>, local_repo_names: list<string>>
+]: nothing -> string {
   if (($rendered.overrides | columns | is-empty) and ($rendered.imports | is-empty)) {
     return ""
   }
@@ -88,7 +94,10 @@ def render-overrides-text [rendered: record]: nothing -> string {
   $output | to yaml
 }
 
-def make-lock-status [status: string input_name?: any]: nothing -> record {
+def make-lock-status [
+  status: string
+  input_name?: string
+]: nothing -> record<status: string, clean: bool, input_name: oneof<string, nothing>> {
   {
     status: $status
     clean: ($status == "clean")
@@ -96,7 +105,10 @@ def make-lock-status [status: string input_name?: any]: nothing -> record {
   }
 }
 
-def lock-status [output_path: path lock_path: path]: nothing -> record {
+def lock-status [
+  output_path: path
+  lock_path: path
+]: nothing -> record<status: string, clean: bool, input_name: oneof<string, nothing>> {
   if not ($output_path | path exists) {
     return (make-lock-status "clean")
   }
@@ -149,7 +161,7 @@ def lock-status [output_path: path lock_path: path]: nothing -> record {
   make-lock-status "clean"
 }
 
-export def sync [target_path?: path]: nothing -> record {
+export def sync [target_path?: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, output_path: path, mode: string, changed: bool, removed: bool, local_repo_names: list<string>, local_repo_roots: list<string>, local_repo_count: int, lock_status: record<status: string, clean: bool, input_name: oneof<string, nothing>>, lock_refresh_needed: bool> {
   let target = resolve-target ($target_path | default ".")
   let output_path = ($target.target_root | path join "devenv.local.yaml")
   let lock_path = ($target.target_root | path join "devenv.lock")
@@ -176,7 +188,7 @@ export def sync [target_path?: path]: nothing -> record {
 
   let repo_paths = (
     $target.model.repos
-    | items {|repo_name, repo_entry| [$repo_name (($repo_entry | get path) | into string)] }
+    | items {|repo_name, repo_entry| [$repo_name ($repo_entry.path | into string)] }
     | into record
   )
   let local_repo_roots = (
