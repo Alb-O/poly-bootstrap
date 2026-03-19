@@ -404,8 +404,8 @@ in
       == stripContext "path:${output}/repos/ar_devenv_base"
       && stripContext rendered.inputs.agentroots.url
       == stripContext "path:${output}/repos/agentroots"
-      && stripContext rendered.inputs.ar_rust_env.url
-      == stripContext "path:${output}/repos/ar_rust_env"
+      && stripContext rendered.inputs.ar_devenv_rust.url
+      == stripContext "path:${output}/repos/ar_devenv_rust"
       && rendered.imports == [
         "ar_devenv_base"
         "nusurf/nushell-plugin"
@@ -565,7 +565,7 @@ in
       && stripContext appRendered.inputs.agentroots.url
       == stripContext "path:${output}/repos/agentroots"
       && stripContext depRendered.inputs.docs-shared.url
-      == stripContext "path:${output}/repos/ar_docs_env"
+      == stripContext "path:${output}/repos/ar_devenv_docs"
       && bootstrapLog == [ "${output}/repos/app" ]
       && filesLog == [
         "${output}/repos/bootstrap_dep"
@@ -791,8 +791,8 @@ in
         "${output}/repos/agentroots"
         "${output}/repos/app"
         "${output}/repos/ar_devenv_base"
-        "${output}/repos/ar_docs_env"
-        "${output}/repos/ar_rust_env"
+        "${output}/repos/ar_devenv_docs"
+        "${output}/repos/ar_devenv_rust"
         "${output}/repos/bootstrap_dep"
         "${output}/repos/nusurf"
       ]

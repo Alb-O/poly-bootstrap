@@ -13,16 +13,16 @@
       localRepo: "ar_devenv_base"
     }
     docs-shared: {
-      url: "github:Alb-O/ar_docs_env"
+      url: "github:Alb-O/ar_devenv_docs"
       flake: false
       imports: [ "docs-shared/subdir" ]
-      localRepo: "ar_docs_env"
+      localRepo: "ar_devenv_docs"
     }
     nusurf: {
       url: "github:Alb-O/nusurf"
       flake: false
       imports: [ "nusurf/nushell-plugin" ]
-      requiresInputs: [ "ar_rust_env" ]
+      requiresInputs: [ "ar_devenv_rust" ]
       localRepo: "nusurf"
     }
     agentroots: {
@@ -31,10 +31,10 @@
       imports: [ "agentroots/tooling" ]
       localRepo: "agentroots"
     }
-    ar_rust_env: {
-      url: "github:Alb-O/ar_rust_env"
+    ar_devenv_rust: {
+      url: "github:Alb-O/ar_devenv_rust"
       flake: false
-      localRepo: "ar_rust_env"
+      localRepo: "ar_devenv_rust"
     }
   }
 
@@ -57,8 +57,8 @@
         nusurf: "repos/nusurf"
         agentroots: "repos/agentroots"
         ar_devenv_base: "repos/ar_devenv_base"
-        ar_docs_env: "repos/ar_docs_env"
-        ar_rust_env: "repos/ar_rust_env"
+        ar_devenv_docs: "repos/ar_devenv_docs"
+        ar_devenv_rust: "repos/ar_devenv_rust"
       }
       layers: [ "repo-empty" ]
     }

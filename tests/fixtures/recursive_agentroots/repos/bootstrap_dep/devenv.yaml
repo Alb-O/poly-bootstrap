@@ -1,6 +1,6 @@
 inputs:
   docs-shared:
-    url: github:Alb-O/ar_docs_env
+    url: github:Alb-O/ar_devenv_docs
     flake: false
   missing-local:
     url: github:Alb-O/not-present
