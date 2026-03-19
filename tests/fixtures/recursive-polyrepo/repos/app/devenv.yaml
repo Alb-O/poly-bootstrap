@@ -1,7 +1,4 @@
 inputs:
-  agent-scripts:
-    url: github:Alb-O/agent-scripts
-    flake: false
   poly-bootstrap:
     url: github:Alb-O/poly-bootstrap
     flake: false
@@ -9,6 +6,5 @@ inputs:
     url: github:Alb-O/not-local
     flake: false
 imports:
-  - agent-scripts/tooling
   - poly-bootstrap/tooling
   - remote-only

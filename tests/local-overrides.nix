@@ -174,7 +174,6 @@ let
       };
       modules = [
         toolingSupportOptionsModule
-        "${root}/repos/agent-scripts/tooling"
         "${root}/repos/poly-bootstrap/tooling"
       ];
     };
@@ -405,21 +404,15 @@ in
         };
         rendered = readYaml "${output}/repos/app/devenv.local.yaml";
       in
-      stripContext rendered.inputs.agent-scripts.url
-      == stripContext "path:${output}/repos/agent-scripts"
-      && stripContext rendered.inputs.docs-shared.url
-      == stripContext "path:${output}/repos/poly-docs-env"
-      && stripContext rendered.inputs.nusurf.url
+      stripContext rendered.inputs.nusurf.url
       == stripContext "path:${output}/repos/nusurf"
       && stripContext rendered.inputs.poly-bootstrap.url
       == stripContext "path:${output}/repos/poly-bootstrap"
       && stripContext rendered.inputs.poly-rust-env.url
       == stripContext "path:${output}/repos/poly-rust-env"
       && rendered.imports == [
-        "agent-scripts/tooling"
         "nusurf/nushell-plugin"
         "poly-bootstrap/tooling"
-        "docs-shared/subdir"
       ];
     expected = true;
   };
@@ -443,18 +436,12 @@ in
       in
       status.target_kind == "root"
       && status.mode == "written"
-      && status.local_repo_count == 5
-      && stripContext rendered.inputs.agent-scripts.url
-      == stripContext "path:${output}/repos/agent-scripts"
-      && stripContext rendered.inputs.docs-shared.url
-      == stripContext "path:${output}/repos/poly-docs-env"
+      && status.local_repo_count == 3
       && stripContext rendered.inputs.poly-bootstrap.url
       == stripContext "path:${output}/repos/poly-bootstrap"
       && rendered.imports == [
-        "agent-scripts/tooling"
         "nusurf/nushell-plugin"
         "poly-bootstrap/tooling"
-        "docs-shared/subdir"
       ];
     expected = true;
   };
@@ -575,8 +562,6 @@ in
       in
       status.target_name == "app"
       && status.dependency_repos == [ "agent-scripts" ]
-      && stripContext appRendered.inputs.agent-scripts.url
-      == stripContext "path:${output}/repos/agent-scripts"
       && stripContext appRendered.inputs.poly-bootstrap.url
       == stripContext "path:${output}/repos/poly-bootstrap"
       && stripContext depRendered.inputs.docs-shared.url
@@ -589,7 +574,7 @@ in
     expected = true;
   };
 
-  localInputOverrides."test consumer tooling module exposes committer and devenv-run from explicit tooling imports" = {
+  localInputOverrides."test consumer tooling module exposes committer and devenv-run from poly bootstrap tooling" = {
     expr =
       let
         output = runtimeFixture "polyrepo-consumer-tooling-module";

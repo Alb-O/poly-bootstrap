@@ -4,8 +4,7 @@ Polyrepo-specific bootstrap and runtime tooling for this workspace.
 
 Ownership:
 
-- `poly-bootstrap` owns bootstrap, shell export reuse, `devenv-run`, and the `poly-bootstrap/tooling` consumer module.
-- `agent-scripts` owns only generic reusable tools such as `committer`.
+- `poly-bootstrap` owns bootstrap, shell export reuse, `devenv-run`, `committer`, and the `poly-bootstrap/tooling` consumer module.
 
 Responsibilities:
 
@@ -14,7 +13,7 @@ Responsibilities:
 - bootstrap manifest-declared dependency repos
 - run manifest-declared bootstrap tasks such as `devenv:files`
 - refresh the target repo lock/export state when needed
-- package `devenv-run` for consumers via `poly-bootstrap/tooling`
+- package `devenv-run` and `committer` for consumers via `poly-bootstrap/tooling`
 
 ## Public Interface
 
@@ -49,7 +48,6 @@ Consumer imports are explicit:
 
 ```nix
 imports = [
-  inputs.agent-scripts.tooling
   inputs.poly-bootstrap.tooling
 ];
 ```

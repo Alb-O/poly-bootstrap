@@ -2,7 +2,8 @@
 
 let
   toolingSource = pkgs.runCommand "poly-bootstrap-tooling-source" { } ''
-    mkdir -p "$out/bin" "$out/nu/polyrepo"
+    mkdir -p "$out/bin" "$out/nu/polyrepo" "$out/nu/tooling"
+    cp ${../bin/committer.nu} "$out/bin/committer.nu"
     cp ${../bin/devenv-run.nu} "$out/bin/devenv-run.nu"
     cp ${../bin/polyrepo.nu} "$out/bin/polyrepo.nu"
     cp ${../nu/support.nu} "$out/nu/support.nu"
@@ -14,7 +15,21 @@ let
     cp ${../nu/polyrepo/mod.nu} "$out/nu/polyrepo/mod.nu"
     cp ${../nu/polyrepo/resolve.nu} "$out/nu/polyrepo/resolve.nu"
     cp ${../nu/polyrepo/sync_runtime.nu} "$out/nu/polyrepo/sync_runtime.nu"
+    cp ${../nu/tooling/committer.nu} "$out/nu/tooling/committer.nu"
   '';
+  committer = pkgs.writeShellApplication {
+    name = "committer";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.git
+      pkgs.nushell
+      pkgs.pre-commit
+      pkgs.prek
+    ];
+    text = ''
+      exec ${lib.getExe pkgs.nushell} ${toolingSource}/bin/committer.nu "$@"
+    '';
+  };
   devenvRun = pkgs.writeShellApplication {
     name = "devenv-run";
     runtimeInputs = [
@@ -91,8 +106,12 @@ in
 {
   config = lib.mkMerge [
     {
-      packages = [ devenvRun ];
+      packages = [
+        committer
+        devenvRun
+      ];
 
+      outputs.committer = committer;
       outputs.devenv-run = devenvRun;
     }
     (lib.optionalAttrs (options ? instructions && options.instructions ? instructions) {

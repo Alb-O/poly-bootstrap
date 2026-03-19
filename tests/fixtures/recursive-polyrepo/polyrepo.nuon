@@ -6,13 +6,6 @@
   }
 
   inputs: {
-    agent-scripts: {
-      url: "github:Alb-O/agent-scripts"
-      flake: false
-      imports: [ "agent-scripts/tooling" ]
-      requiresInputs: [ "docs-shared" ]
-      localRepo: "agent-scripts"
-    }
     docs-shared: {
       url: "github:Alb-O/poly-docs-env"
       flake: false
@@ -41,7 +34,7 @@
 
   layers: {
     shared-tooling: {
-      inputs: [ "agent-scripts" "nusurf" "poly-bootstrap" ]
+      inputs: [ "nusurf" "poly-bootstrap" ]
     }
     repo-empty: {
       extends: [ "shared-tooling" ]
