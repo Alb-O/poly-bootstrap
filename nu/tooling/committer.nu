@@ -185,13 +185,14 @@ def emit-command-output [result: record<stdout: string, stderr: string, exit_cod
   }
 }
 
-def staged-nested-gitlink-deletions [repo_path: path files: list<string>]: nothing -> list<path> {
+def staged-nested-gitlink-paths [repo_path: path files: list<string>]: nothing -> list<path> {
   $files
   | where {|pathspec| not (pathspec-is-glob $pathspec) }
   | each {|pathspec|
       let worktree_path = (worktree-pattern-path $repo_path $pathspec)
+      let staged_matches = (git-lines $repo_path [diff --cached --name-only -- $pathspec])
 
-      if (staged-path-is-deletion $repo_path $pathspec) and (nested-git-worktree-path $worktree_path) {
+      if (not ($staged_matches | is-empty)) and (nested-git-worktree-path $worktree_path) {
         $worktree_path
       }
     }
@@ -362,7 +363,7 @@ export def run [
     ^rm -rf $hook_tmpdir
   }
 
-  let commit_hidden_paths = (staged-nested-gitlink-deletions $repo_path $selection.files)
+  let commit_hidden_paths = (staged-nested-gitlink-paths $repo_path $selection.files)
 
   if ($commit_hidden_paths | is-empty) {
     ^git -C $repo_path commit --only --no-verify -m $commit_message -- ...$selection.files
