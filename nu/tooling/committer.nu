@@ -51,6 +51,14 @@ def worktree-pattern-path [repo_path: path pattern: string]: nothing -> path {
   }
 }
 
+def nested-git-worktree-path [candidate: path]: nothing -> bool {
+  (
+    ($candidate | path exists)
+    and (($candidate | path type) == dir)
+    and ([$candidate ".git"] | path join | path exists)
+  )
+}
+
 def tracked-glob-has-live-match [repo_root: path tracked_paths: list<string>]: nothing -> bool {
   $tracked_paths
   | any {|tracked_path| ([ $repo_root $tracked_path ] | path join | path exists) }
@@ -77,10 +85,20 @@ def select-pattern [
   # works whether the caller passes a literal file or a pattern.
   let pathspec = (git-pathspec $pattern)
   let pattern_is_glob = (pathspec-is-glob $pattern)
+  let staged_matches = (git-lines $repo_path [diff --cached --name-only -- $pathspec])
 
   # Existing worktree paths still need `git add -A` so content changes, adds,
   # and deletions under the selected path are refreshed in the index first.
   let pattern_in_repo = (worktree-pattern-path $repo_path $pattern)
+  # One exception: if the caller already has a staged deletion for a literal
+  # path that now points at a nested Git worktree, keep that staged deletion and
+  # skip `git add -A`. Re-adding such a path would stage the embedded repo
+  # itself instead of preserving the selected gitlink removal.
+  if (not $pattern_is_glob) and (not ($staged_matches | is-empty)) and (nested-git-worktree-path $pattern_in_repo) {
+    $next.files = ($next.files | append $pathspec)
+    return $next
+  }
+
   if ($pattern_in_repo | path exists) {
     $next.files = ($next.files | append $pathspec)
     $next.initial_add_files = ($next.initial_add_files | append $pathspec)
@@ -136,7 +154,7 @@ def select-pattern [
   # A path can already be staged away by a previous failed commit attempt.
   # Keep it in the commit set, but skip `git add -A` because there is nothing
   # left in the worktree for git to match.
-  if not ((git-lines $repo_path [diff --cached --name-only -- $pathspec]) | is-empty) {
+  if not ($staged_matches | is-empty) {
     $next.files = ($next.files | append $pathspec)
     return $next
   }
@@ -151,6 +169,52 @@ def hook-files [repo_path: path files: list<string>]: nothing -> list<string> {
 
 def combined-output [result: record<stdout: string, stderr: string, exit_code: int>]: nothing -> string {
   [$result.stdout $result.stderr] | str join ""
+}
+
+def emit-command-output [result: record<stdout: string, stderr: string, exit_code: int>]: nothing -> nothing {
+  if ($result.stdout | is-not-empty) {
+    print -n $result.stdout
+  }
+
+  if ($result.stderr | is-not-empty) {
+    print-stderr $result.stderr
+  }
+}
+
+def staged-nested-gitlink-deletions [repo_path: path files: list<string>]: nothing -> list<path> {
+  $files
+  | where {|pathspec| not (pathspec-is-glob $pathspec) }
+  | each {|pathspec|
+      let worktree_path = (worktree-pattern-path $repo_path $pathspec)
+      let staged_matches = (git-lines $repo_path [diff --cached --name-only -- $pathspec])
+
+      if (not ($staged_matches | is-empty)) and (nested-git-worktree-path $worktree_path) {
+        $worktree_path
+      }
+    }
+  | where {|path| $path != null }
+}
+
+def hide-worktree-paths [paths: list<path> tmpdir: path]: nothing -> list<record<original: path, hidden: path>> {
+  $paths
+  | enumerate
+  | each {|entry|
+      let hidden = [$tmpdir $"($entry.index)-($entry.item | path basename)"] | path join
+      ^mv $entry.item $hidden
+      {
+        original: $entry.item
+        hidden: $hidden
+      }
+    }
+}
+
+def restore-worktree-paths [hidden_paths: list<record<original: path, hidden: path>>]: nothing -> nothing {
+  $hidden_paths
+  | reverse
+  | each {|entry|
+      ^mv $entry.hidden $entry.original
+    }
+  | ignore
 }
 
 def run-pre-commit-hooks [
@@ -295,5 +359,21 @@ export def run [
     ^rm -rf $hook_tmpdir
   }
 
-  ^git -C $repo_path commit --only --no-verify -m $commit_message -- ...$selection.files
+  let commit_hidden_paths = (staged-nested-gitlink-deletions $repo_path $selection.files)
+
+  if ($commit_hidden_paths | is-empty) {
+    ^git -C $repo_path commit --only --no-verify -m $commit_message -- ...$selection.files
+    return
+  }
+
+  let commit_tmpdir = (^mktemp -d | str trim)
+  let hidden_paths = (hide-worktree-paths $commit_hidden_paths $commit_tmpdir)
+  let commit_result = (do { ^git -C $repo_path commit --only --no-verify -m $commit_message -- ...$selection.files } | complete)
+  restore-worktree-paths $hidden_paths
+  ^rm -rf $commit_tmpdir
+  emit-command-output $commit_result
+
+  if $commit_result.exit_code != 0 {
+    exit $commit_result.exit_code
+  }
 }
