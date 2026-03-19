@@ -59,6 +59,10 @@ def nested-git-worktree-path [candidate: path]: nothing -> bool {
   )
 }
 
+def staged-path-is-deletion [repo_path: path pathspec: string]: nothing -> bool {
+  not ((git-lines $repo_path [diff --cached --name-only --diff-filter=D -- $pathspec]) | is-empty)
+}
+
 def tracked-glob-has-live-match [repo_root: path tracked_paths: list<string>]: nothing -> bool {
   $tracked_paths
   | any {|tracked_path| ([ $repo_root $tracked_path ] | path join | path exists) }
@@ -94,7 +98,7 @@ def select-pattern [
   # path that now points at a nested Git worktree, keep that staged deletion and
   # skip `git add -A`. Re-adding such a path would stage the embedded repo
   # itself instead of preserving the selected gitlink removal.
-  if (not $pattern_is_glob) and (not ($staged_matches | is-empty)) and (nested-git-worktree-path $pattern_in_repo) {
+  if (not $pattern_is_glob) and (staged-path-is-deletion $repo_path $pathspec) and (nested-git-worktree-path $pattern_in_repo) {
     $next.files = ($next.files | append $pathspec)
     return $next
   }
@@ -186,9 +190,8 @@ def staged-nested-gitlink-deletions [repo_path: path files: list<string>]: nothi
   | where {|pathspec| not (pathspec-is-glob $pathspec) }
   | each {|pathspec|
       let worktree_path = (worktree-pattern-path $repo_path $pathspec)
-      let staged_matches = (git-lines $repo_path [diff --cached --name-only -- $pathspec])
 
-      if (not ($staged_matches | is-empty)) and (nested-git-worktree-path $worktree_path) {
+      if (staged-path-is-deletion $repo_path $pathspec) and (nested-git-worktree-path $worktree_path) {
         $worktree_path
       }
     }
