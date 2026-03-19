@@ -87,11 +87,15 @@ export def shell-export-fingerprint [repo_root: path]: nothing -> string {
       for rel_path in [
         "bin/devenv-run.nu"
         "bin/polyrepo.nu"
-        "nu/runtime.nu"
         "nu/support.nu"
+        "nu/polyrepo/bootstrap_runtime.nu"
+        "nu/polyrepo/check_runtime.nu"
         "nu/polyrepo/common.nu"
         "nu/polyrepo/devenv_run.nu"
+        "nu/polyrepo/manifest.nu"
         "nu/polyrepo/mod.nu"
+        "nu/polyrepo/resolve.nu"
+        "nu/polyrepo/sync_runtime.nu"
         "tooling/default.nix"
         "tooling/devenv.nix"
       ] {

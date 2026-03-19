@@ -5,11 +5,15 @@ let
     mkdir -p "$out/bin" "$out/nu/polyrepo"
     cp ${../bin/devenv-run.nu} "$out/bin/devenv-run.nu"
     cp ${../bin/polyrepo.nu} "$out/bin/polyrepo.nu"
-    cp ${../nu/runtime.nu} "$out/nu/runtime.nu"
     cp ${../nu/support.nu} "$out/nu/support.nu"
+    cp ${../nu/polyrepo/bootstrap_runtime.nu} "$out/nu/polyrepo/bootstrap_runtime.nu"
+    cp ${../nu/polyrepo/check_runtime.nu} "$out/nu/polyrepo/check_runtime.nu"
     cp ${../nu/polyrepo/common.nu} "$out/nu/polyrepo/common.nu"
     cp ${../nu/polyrepo/devenv_run.nu} "$out/nu/polyrepo/devenv_run.nu"
+    cp ${../nu/polyrepo/manifest.nu} "$out/nu/polyrepo/manifest.nu"
     cp ${../nu/polyrepo/mod.nu} "$out/nu/polyrepo/mod.nu"
+    cp ${../nu/polyrepo/resolve.nu} "$out/nu/polyrepo/resolve.nu"
+    cp ${../nu/polyrepo/sync_runtime.nu} "$out/nu/polyrepo/sync_runtime.nu"
   '';
   devenvRun = pkgs.writeShellApplication {
     name = "devenv-run";

@@ -1,4 +1,4 @@
-use ../runtime.nu [bootstrap]
+use bootstrap_runtime.nu [bootstrap]
 use ../support.nu [fail]
 use common.nu [run-in-shell-export]
 

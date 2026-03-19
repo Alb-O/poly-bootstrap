@@ -37,6 +37,11 @@ Use `--json` with `check`, `sync`, or `bootstrap` for machine-readable status.
 Nu module layout:
 
 - `nu/polyrepo/mod.nu`
+- `nu/polyrepo/manifest.nu`
+- `nu/polyrepo/resolve.nu`
+- `nu/polyrepo/sync_runtime.nu`
+- `nu/polyrepo/bootstrap_runtime.nu`
+- `nu/polyrepo/check_runtime.nu`
 - `nu/polyrepo/common.nu`
 - `nu/polyrepo/devenv_run.nu`
 
@@ -74,7 +79,10 @@ Key rules:
 - The root workspace is first-class. `check .`, `sync .`, and `bootstrap .` work from the polyrepo root directly.
 - `.polyrepo-direnvrc` is only a shell bridge for direnv and calls `repos/poly-bootstrap/bootstrap`.
 - `bin/devenv-run.nu` is the canonical command source packaged by `tooling/default.nix`.
-- shared helper logic lives in `nu/polyrepo/common.nu`.
+- manifest parsing and catalog normalization live in `nu/polyrepo/manifest.nu`.
+- target resolution and validation live in `nu/polyrepo/resolve.nu`.
+- sync/bootstrap/check commands are split across `nu/polyrepo/sync_runtime.nu`, `nu/polyrepo/bootstrap_runtime.nu`, and `nu/polyrepo/check_runtime.nu`.
+- shared shell-export helper logic lives in `nu/polyrepo/common.nu`.
 
 ## Testing
 

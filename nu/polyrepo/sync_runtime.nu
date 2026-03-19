@@ -1,0 +1,206 @@
+use ../support.nu [fail sort-record]
+use manifest.nu [get-import-input-name parse-yaml-mapping]
+use resolve.nu [resolve-target resolve-target-layer-spec]
+
+def selected-imports [imports_list: list<string> effective_input_names: list<string>]: nothing -> list<string> {
+  $imports_list
+  | where {|import_name|
+      let import_input_name = (get-import-input-name $import_name | default $import_name)
+      $import_input_name in $effective_input_names
+    }
+  | uniq
+}
+
+def render-target-overrides [model: record target_kind: string target_name: any]: nothing -> record {
+  let target_spec = resolve-target-layer-spec $model $target_kind $target_name
+  let repo_paths = (
+    $model.repos
+    | items {|repo_name, repo_entry| [$repo_name (($repo_entry | get path) | into string)] }
+    | into record
+  )
+
+  mut overrides = {}
+  mut local_repo_names = []
+  mut pending_inputs = ($target_spec.inputs | uniq)
+  mut visited_inputs = []
+  mut collected_input_imports = []
+
+  loop {
+    if ($pending_inputs | is-empty) {
+      break
+    }
+
+    let input_name = ($pending_inputs | first)
+    $pending_inputs = ($pending_inputs | skip 1)
+
+    if $input_name in $visited_inputs {
+      continue
+    }
+
+    $visited_inputs = ($visited_inputs | append $input_name)
+    let input_entry = ($model.inputs | get -o $input_name)
+    if (($input_entry | describe) !~ '^record') {
+      fail $"unknown input '($input_name)'"
+    }
+
+    let local_repo = ($input_entry | get localRepo)
+    if (($local_repo | describe) != 'string') {
+      continue
+    }
+
+    let repo_path = ($repo_paths | get -o $local_repo)
+    if (($repo_path | describe) != 'string') {
+      fail $"input '($input_name)' maps to unknown local repo '($local_repo)'"
+    }
+
+    $local_repo_names = ($local_repo_names | append $local_repo)
+    $overrides = ($overrides | merge {
+      $input_name: ((($input_entry | get spec) | merge { url: $"path:($repo_path)" }))
+    })
+    $collected_input_imports = ($collected_input_imports | append ($input_entry | get imports))
+    $pending_inputs = ($pending_inputs | append ($input_entry | get requiresInputs))
+  }
+
+  let effective_input_names = ($overrides | columns | uniq)
+  let rendered_imports = (($target_spec.imports | append $collected_input_imports) | flatten | uniq)
+
+  {
+    overrides: $overrides
+    imports: (selected-imports $rendered_imports $effective_input_names)
+    local_repo_names: ($local_repo_names | uniq | sort)
+  }
+}
+
+def render-overrides-text [rendered: record]: nothing -> string {
+  if (($rendered.overrides | columns | is-empty) and ($rendered.imports | is-empty)) {
+    return ""
+  }
+
+  mut output = {}
+  if not (($rendered.overrides | columns) | is-empty) {
+    $output = ($output | merge { inputs: (sort-record $rendered.overrides) })
+  }
+
+  if not ($rendered.imports | is-empty) {
+    $output = ($output | merge { imports: $rendered.imports })
+  }
+
+  $output | to yaml
+}
+
+def make-lock-status [status: string input_name?: any]: nothing -> record {
+  {
+    status: $status
+    clean: ($status == "clean")
+    input_name: ($input_name | default null)
+  }
+}
+
+def lock-status [output_path: path lock_path: path]: nothing -> record {
+  if not ($output_path | path exists) {
+    return (make-lock-status "clean")
+  }
+
+  let local_doc = parse-yaml-mapping $output_path (open --raw $output_path)
+  let desired_inputs = ($local_doc | get -o inputs | default {})
+
+  if (($desired_inputs | describe) !~ '^record') {
+    fail $"expected `inputs` to be a mapping in ($output_path)"
+  }
+
+  if (($desired_inputs | columns) | is-empty) {
+    return (make-lock-status "clean")
+  }
+
+  if not ($lock_path | path exists) {
+    return (make-lock-status "missing-lock")
+  }
+
+  let lock_doc = try {
+    open --raw $lock_path | from json
+  } catch {
+    fail $"expected valid JSON in ($lock_path)"
+  }
+  let root_name = ($lock_doc | get -o root)
+  let nodes = ($lock_doc | get -o nodes | default {})
+  let root_node = if (($root_name | describe) == 'string') and ($root_name in ($nodes | columns)) {
+    $nodes | get $root_name
+  } else {
+    {}
+  }
+  let root_inputs = ($root_node | get -o inputs | default {})
+
+  for input_name in ($desired_inputs | columns | sort) {
+    if not ($input_name in ($root_inputs | columns)) {
+      return (make-lock-status "missing-root-input" $input_name)
+    }
+
+    let input_spec = ($desired_inputs | get $input_name)
+    let url = ($input_spec | get -o url)
+    let locked_name = ($root_inputs | get $input_name)
+    let locked_node = if (($locked_name | describe) == 'string') and ($locked_name in ($nodes | columns)) {
+      $nodes | get $locked_name
+    } else {
+      {}
+    }
+    let locked_original = ($locked_node | get -o original)
+
+    if (($url | describe) == 'string') and (($locked_original | describe) == 'string') and ($locked_original != $url) {
+      return (make-lock-status "stale-root-input" $input_name)
+    }
+  }
+
+  make-lock-status "clean"
+}
+
+export def sync [target_path?: path]: nothing -> record {
+  let target = resolve-target ($target_path | default ".")
+  let output_path = ($target.target_root | path join "devenv.local.yaml")
+  let lock_path = ($target.target_root | path join "devenv.lock")
+  let rendered = render-target-overrides $target.model $target.target_kind $target.target_name
+  let overrides_text = render-overrides-text $rendered
+
+  let existing_text = if ($output_path | path exists) {
+    open --raw $output_path
+  }
+  mut mode = "unchanged"
+
+  if $overrides_text == "" {
+    if (($existing_text | describe) == 'string') {
+      rm --force $output_path
+      $mode = "removed"
+    }
+  } else if $existing_text != $overrides_text {
+    if ($output_path | path exists) {
+      rm --force $output_path
+    }
+    $overrides_text | save --force $output_path
+    $mode = "written"
+  }
+
+  let repo_paths = (
+    $target.model.repos
+    | items {|repo_name, repo_entry| [$repo_name (($repo_entry | get path) | into string)] }
+    | into record
+  )
+  let local_repo_roots = (
+    $rendered.local_repo_names
+    | each {|repo_name| $repo_paths | get $repo_name }
+  )
+  let lock_status_value = lock-status $output_path $lock_path
+
+  {
+    target_root: $target.target_root
+    target_kind: $target.target_kind
+    target_name: ($target.target_name | default null)
+    output_path: $output_path
+    mode: $mode
+    changed: ($mode != "unchanged")
+    removed: ($mode == "removed")
+    local_repo_names: $rendered.local_repo_names
+    local_repo_roots: $local_repo_roots
+    local_repo_count: ($rendered.local_repo_names | length)
+    lock_status: $lock_status_value
+    lock_refresh_needed: (not $lock_status_value.clean)
+  }
+}
