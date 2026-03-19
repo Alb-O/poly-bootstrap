@@ -181,6 +181,13 @@ export def materialize-shell-export [repo_root: path]: nothing -> nothing {
   }
 }
 
+def clear-devenv-eval-cache [repo_root: path]: nothing -> nothing {
+  do {
+    cd $repo_root
+    ^rm -f .devenv/nix-eval-cache.db .devenv/nix-eval-cache.db-shm .devenv/nix-eval-cache.db-wal | ignore
+  }
+}
+
 export def ensure-shell-export [
   repo_root: path
   refresh_requested: bool
@@ -212,6 +219,9 @@ export def ensure-shell-export [
     }
   }
 
+  # Keep direnv's later `use devenv` invocation from reusing an out-of-date
+  # eval result after AgentRoots has already decided the environment changed.
+  clear-devenv-eval-cache $repo_root
   materialize-shell-export $repo_root
   let refreshed_export = (latest-shell-export $repo_root)
 
