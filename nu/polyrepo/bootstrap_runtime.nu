@@ -1,4 +1,4 @@
-use ../support.nu [fail]
+use ../support.nu [fail is-record]
 use common.nu [ensure-shell-export]
 use manifest.nu [is-bootstrap-target]
 use resolve.nu [resolve-target]
@@ -35,7 +35,7 @@ def bootstrap-order [model: record repo_name: string stack: list<string> visited
   }
 
   let repo_entry = ($model.repos | get -o $repo_name)
-  if (($repo_entry | describe) !~ '^record') {
+  if not (is-record $repo_entry) {
     fail $"unknown repo '($repo_name)'"
   }
 
@@ -81,23 +81,23 @@ def bootstrap-one [target_root: path]: nothing -> record {
     )
   }
 
-  mut repo_results = []
-  for repo_name in $dependency_names {
-    let repo_entry = ($target_model.repos | get $repo_name)
-    let repo_root = ($repo_entry | get path)
-    let sync_status = sync $repo_root
-    let task_results = (
-      $repo_entry.bootstrapTasks
-      | each {|task_name| run-bootstrap-task $repo_root $task_name }
-    )
+  let repo_results = (
+    $dependency_names
+    | each {|repo_name|
+        let repo_entry = ($target_model.repos | get $repo_name)
+        let repo_root = ($repo_entry | get path)
 
-    $repo_results = ($repo_results | append {
-      repo_name: $repo_name
-      repo_root: $repo_root
-      sync: $sync_status
-      bootstrap_tasks: $task_results
-    })
-  }
+        {
+          repo_name: $repo_name
+          repo_root: $repo_root
+          sync: (sync $repo_root)
+          bootstrap_tasks: (
+            $repo_entry.bootstrapTasks
+            | each {|task_name| run-bootstrap-task $repo_root $task_name }
+          )
+        }
+      }
+  )
 
   let target_sync = sync $target.target_root
   let target_repo_entry = if $target.target_kind == "repo" {

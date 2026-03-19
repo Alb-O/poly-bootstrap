@@ -1,4 +1,4 @@
-use ../support.nu [fail]
+use ../support.nu [fail is-record is-string]
 use manifest.nu [
   append-error
   describe-repo-list
@@ -17,7 +17,7 @@ def resolve-layer-spec [model: record layer_name: string stack: list<string>]: n
   }
 
   let layer_entry = ($model.layers | get -o $layer_name)
-  if (($layer_entry | describe) !~ '^record') {
+  if not (is-record $layer_entry) {
     fail $"unknown layer '($layer_name)'"
   }
 
@@ -41,22 +41,16 @@ export def resolve-target-layer-spec [model: record target_kind: string target_n
     $model.root.layers
   } else {
     let repo_entry = ($model.repos | get -o $target_name)
-    if (($repo_entry | describe) !~ '^record') {
+    if not (is-record $repo_entry) {
       fail $"unknown repo '($target_name)'"
     }
     $repo_entry.layers
   }
 
-  mut resolved = {
-    inputs: []
-    imports: []
-  }
-
-  for layer_name in $layer_names {
-    $resolved = merge-layer-spec $resolved (resolve-layer-spec $model $layer_name [])
-  }
-
-  $resolved
+  $layer_names
+  | reduce --fold { inputs: [], imports: [] } {|layer_name, resolved|
+      merge-layer-spec $resolved (resolve-layer-spec $model $layer_name [])
+    }
 }
 
 export def validate-model [model: record]: nothing -> record {
@@ -74,7 +68,7 @@ export def validate-model [model: record]: nothing -> record {
   for input_name in $input_names {
     let input_entry = ($model.inputs | get $input_name)
     let local_repo = ($input_entry | get localRepo)
-    if (($local_repo | describe) == 'string') and (not ($local_repo in $repo_names)) {
+    if (is-string $local_repo) and (not ($local_repo in $repo_names)) {
       $errors = append-error $errors $"inputs.($input_name).localRepo" $"references unknown repo '($local_repo)'"
     }
 
@@ -86,7 +80,7 @@ export def validate-model [model: record]: nothing -> record {
 
     for import_name in ($input_entry | get imports) {
       let import_input_name = (get-import-input-name $import_name)
-      if (($import_input_name | describe) == 'string') and (not ($import_input_name in $input_names)) {
+      if (is-string $import_input_name) and (not ($import_input_name in $input_names)) {
         $errors = append-error $errors $"inputs.($input_name).imports" $"references import '($import_name)' whose base input '($import_input_name)' is not declared in inputs"
       }
     }
@@ -109,7 +103,7 @@ export def validate-model [model: record]: nothing -> record {
 
     for import_name in ($layer_entry | get imports) {
       let import_input_name = (get-import-input-name $import_name)
-      if (($import_input_name | describe) == 'string') and (not ($import_input_name in $input_names)) {
+      if (is-string $import_input_name) and (not ($import_input_name in $input_names)) {
         $errors = append-error $errors $"layers.($layer_name).imports" $"references import '($import_name)' whose base input '($import_input_name)' is not declared in inputs"
       }
     }
@@ -120,7 +114,7 @@ export def validate-model [model: record]: nothing -> record {
     } catch {|err|
       $err.msg
     }
-    if (($layer_error | describe) == 'string') {
+    if (is-string $layer_error) {
       $errors = append-error $errors $"layers.($layer_name)" $layer_error
     }
   }
@@ -162,7 +156,7 @@ def repo-record-by-path [model: record repo_root: path]: nothing -> oneof<record
   )
 
   let match = ($matches | get -o 0)
-  if (($match | describe) !~ '^record') {
+  if not (is-record $match) {
     return null
   }
 
@@ -192,7 +186,7 @@ export def resolve-target [target_path: path]: nothing -> record {
   let repo_root = (find-repo-root $start_path | default $start_path)
   let polyrepo_root = (find-polyrepo-root $start_path)
 
-  if (($polyrepo_root | describe) != 'string') {
+  if not (is-string $polyrepo_root) {
     fail $"polyrepo root could not be inferred from ($start_path)"
   }
 
@@ -211,7 +205,7 @@ export def resolve-target [target_path: path]: nothing -> record {
   }
 
   let repo_record = repo-record-by-path $model $normalized_repo_root
-  if (($repo_record | describe) !~ '^record') {
+  if not (is-record $repo_record) {
     let repo_names = ($model.repos | columns)
     let catalog_path = (manifest-path $normalized_polyrepo_root)
     fail $"expected repo root ($normalized_repo_root) to be present in the manifest-owned repo catalog at ($catalog_path); available repo names: (describe-repo-list $repo_names)"

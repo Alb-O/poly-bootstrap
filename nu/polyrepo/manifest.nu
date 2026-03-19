@@ -1,18 +1,23 @@
-use ../support.nu [fail polyrepo-manifest-basename]
+use ../support.nu [
+  fail
+  is-list
+  is-non-empty-string
+  is-nothing
+  is-record
+  polyrepo-manifest-basename
+]
 
 def normalize-structured-value [value: any]: nothing -> any {
   match ($value | describe) {
-    $t if $t =~ '^record' => {
+    $t if ($t =~ '^record') => {
       $value
       | items {|key, item| [$key (normalize-structured-value $item)] }
       | into record
     }
-    $t if $t =~ '^list' => {
+    $t if ($t =~ '^list') => {
       $value | each {|item| normalize-structured-value $item }
     }
-    _ => {
-      $value
-    }
+    _ => $value
   }
 }
 
@@ -27,7 +32,7 @@ def parse-nuon-mapping [source_label: string nuon_text: string]: nothing -> reco
     }
   }
 
-  if (($parsed | describe) !~ '^record') {
+  if not (is-record $parsed) {
     fail $"expected a top-level mapping in ($source_label)"
   }
 
@@ -45,7 +50,7 @@ export def parse-yaml-mapping [source_label: string yaml_text: string]: nothing 
     }
   }
 
-  if (($parsed | describe) !~ '^record') {
+  if not (is-record $parsed) {
     fail $"expected a top-level mapping in ($source_label)"
   }
 
@@ -53,7 +58,7 @@ export def parse-yaml-mapping [source_label: string yaml_text: string]: nothing 
 }
 
 def require-string [value: any field_label: string]: nothing -> string {
-  if (($value | describe) != 'string') or ($value | is-empty) {
+  if not (is-non-empty-string $value) {
     fail $"expected ($field_label) to be a non-empty string"
   }
 
@@ -61,7 +66,7 @@ def require-string [value: any field_label: string]: nothing -> string {
 }
 
 def optional-string [value: any field_label: string]: nothing -> oneof<string, nothing> {
-  if (($value | describe) == 'nothing') {
+  if (is-nothing $value) {
     return null
   }
 
@@ -69,11 +74,11 @@ def optional-string [value: any field_label: string]: nothing -> oneof<string, n
 }
 
 def expect-string-list [value: any field_label: string]: nothing -> list<string> {
-  if (($value | describe) == 'nothing') {
+  if (is-nothing $value) {
     return []
   }
 
-  if (($value | describe) !~ '^list') {
+  if not (is-list $value) {
     fail $"expected ($field_label) to be a list"
   }
 
@@ -83,7 +88,7 @@ def expect-string-list [value: any field_label: string]: nothing -> list<string>
 }
 
 def expect-string-record [value: any field_label: string]: nothing -> record {
-  if (($value | describe) !~ '^record') {
+  if not (is-record $value) {
     fail $"expected ($field_label) to be a mapping"
   }
 
@@ -164,13 +169,13 @@ export def get-import-input-name [import_name: string]: nothing -> oneof<string,
 def normalize-input-entry [input_name: string input_value: any manifest_label: string]: nothing -> record {
   let source_label = $"inputs.($input_name) in ($manifest_label)"
 
-  if (($input_value | describe) !~ '^record') {
+  if not (is-record $input_value) {
     fail $"expected ($source_label) to be a mapping"
   }
 
   let spec = ($input_value | reject --optional imports requiresInputs localRepo)
   let url = ($spec | get -o url)
-  if (($url | describe) != 'string') or ($url | is-empty) {
+  if not (is-non-empty-string $url) {
     fail $"expected ($source_label) to define a non-empty url"
   }
 
@@ -185,7 +190,7 @@ def normalize-input-entry [input_name: string input_value: any manifest_label: s
 def normalize-layer-entry [layer_name: string layer_value: any manifest_label: string]: nothing -> record {
   let source_label = $"layers.($layer_name) in ($manifest_label)"
 
-  if (($layer_value | describe) !~ '^record') {
+  if not (is-record $layer_value) {
     fail $"expected ($source_label) to be a mapping"
   }
 
@@ -197,7 +202,7 @@ def normalize-layer-entry [layer_name: string layer_value: any manifest_label: s
 }
 
 def normalize-repo-config [entry_label: string entry_value: any]: nothing -> record {
-  if (($entry_value | describe) !~ '^record') {
+  if not (is-record $entry_value) {
     fail $"expected ($entry_label) to be a mapping"
   }
 
@@ -293,7 +298,7 @@ def flatten-repos [polyrepo_root: path repo_dirs_root: path repo_groups: record 
     let resolved_path = resolve-repo-path $polyrepo_root ($repo_entry | get path)
     let relative_path = maybe-relativize $resolved_path $repo_dirs_root
 
-    if (($relative_path | describe) == 'nothing') {
+    if (is-nothing $relative_path) {
       $errors = append-error $errors ($repo_entry | get sourcePath) $"resolves to ($resolved_path), which is outside repoDirsPath rooted at ($repo_dirs_root)"
     } else if not (is-repo-root $resolved_path) {
       $errors = append-error $errors ($repo_entry | get sourcePath) $"resolves to ($resolved_path), which is not a repo root"
@@ -361,7 +366,7 @@ export def load-manifest [polyrepo_root: path]: nothing -> record {
   let repo_dirs_root = resolve-repo-path $polyrepo_root $repo_dirs_path
   let root_entry = ($manifest | get -o root | default {})
 
-  if (($root_entry | describe) !~ '^record') {
+  if not (is-record $root_entry) {
     fail $"expected root in ($manifest_label) to be a mapping"
   }
 
@@ -370,19 +375,19 @@ export def load-manifest [polyrepo_root: path]: nothing -> record {
   let repo_groups_catalog = ($manifest | get -o repoGroups | default {})
   let repos_catalog = ($manifest | get -o repos | default {})
 
-  if (($inputs_catalog | describe) !~ '^record') {
+  if not (is-record $inputs_catalog) {
     fail $"expected inputs in ($manifest_label) to be a mapping"
   }
 
-  if (($layers_catalog | describe) !~ '^record') {
+  if not (is-record $layers_catalog) {
     fail $"expected layers in ($manifest_label) to be a mapping"
   }
 
-  if (($repo_groups_catalog | describe) !~ '^record') {
+  if not (is-record $repo_groups_catalog) {
     fail $"expected repoGroups in ($manifest_label) to be a mapping"
   }
 
-  if (($repos_catalog | describe) !~ '^record') {
+  if not (is-record $repos_catalog) {
     fail $"expected repos in ($manifest_label) to be a mapping"
   }
 

@@ -1,4 +1,4 @@
-use ../support.nu [fail]
+use ../support.nu [fail is-non-empty-string is-record is-string]
 
 export def latest-shell-export [repo_root: path]: nothing -> oneof<path, nothing> {
   let shell_glob = (($repo_root | path join ".devenv") | path join "shell-*.sh")
@@ -48,21 +48,21 @@ export def shell-export-local-input-repos [repo_root: path]: nothing -> list<rec
   }
   let local_inputs = ($local_doc | get -o inputs | default {})
 
-  if (($local_inputs | describe) !~ '^record') {
+  if not (is-record $local_inputs) {
     fail $"expected `inputs` to be a mapping in ($local_yaml_path)"
   }
 
   $local_inputs
   | items {|input_name, input_spec|
       let url = ($input_spec | get -o url)
-      if (($url | describe) == 'string') and ($url | str starts-with "path:") {
+      if (is-string $url) and ($url | str starts-with "path:") {
         {
           name: $input_name
           repo_root: ($url | str substring 5..)
         }
       }
     }
-  | where {|entry| (($entry | describe) =~ '^record') }
+  | where {|entry| is-record $entry }
   | sort-by name
 }
 
@@ -120,7 +120,7 @@ export def read-shell-export-meta [repo_root: path]: nothing -> record {
     (
       open --raw $meta_path
       | lines
-      | where {|line| not ($line | str trim | is-empty) }
+      | where {|line| $line | str trim | is-not-empty }
       | each {|line|
           let parsed = ($line | parse -r '^(?<key>[A-Z0-9_]+)=(?<value>.*)$')
           if ($parsed | is-empty) {
@@ -147,7 +147,7 @@ export def read-shell-export-meta [repo_root: path]: nothing -> record {
 
   let export_path = ($meta | get -o POLYREPO_SHELL_EXPORT_PATH)
   let fingerprint = ($meta | get -o POLYREPO_SHELL_EXPORT_FINGERPRINT)
-  if (($export_path | describe) != 'string') or (($fingerprint | describe) != 'string') or ($export_path | is-empty) or ($fingerprint | is-empty) {
+  if not (is-non-empty-string $export_path) or not (is-non-empty-string $fingerprint) {
     return {
       ok: false
       reason: "meta_parse_error"
@@ -185,7 +185,7 @@ export def ensure-shell-export [repo_root: path refresh_requested: bool]: nothin
   let existing_export = (latest-shell-export $repo_root)
   let refresh_reason = if $refresh_requested {
     "forced_refresh"
-  } else if (($existing_export | describe) != 'string') {
+  } else if not (is-string $existing_export) {
     "missing_export"
   } else {
     let meta_status = read-shell-export-meta $repo_root
@@ -212,7 +212,7 @@ export def ensure-shell-export [repo_root: path refresh_requested: bool]: nothin
   materialize-shell-export $repo_root
   let refreshed_export = (latest-shell-export $repo_root)
 
-  if (($refreshed_export | describe) != 'string') {
+  if not (is-string $refreshed_export) {
     fail $"expected devenv shell export under (($repo_root | path join '.devenv'))"
   }
 
@@ -241,7 +241,7 @@ export def run-in-shell-export [
   ...command: string
 ]: nothing -> nothing {
   let prefix_text = shell-export-prefix-text $shell_script
-  let script_text = if (($shell_command | describe) == 'string') {
+  let script_text = if (is-string $shell_command) {
     [
       "#!/usr/bin/env bash"
       "set -euo pipefail"
@@ -259,7 +259,7 @@ export def run-in-shell-export [
     ] | str join "\n"
   }
 
-  if (($shell_command | describe) == 'string') {
+  if (is-string $shell_command) {
     with-env { POLYREPO_SHELL_COMMAND: $shell_command } {
       $script_text | ^bash -s
     }

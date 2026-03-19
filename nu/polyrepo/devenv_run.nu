@@ -1,5 +1,5 @@
 use bootstrap_runtime.nu [bootstrap]
-use ../support.nu [fail]
+use ../support.nu [fail is-non-empty-string is-string]
 use common.nu [run-in-shell-export]
 
 def usage []: nothing -> string {
@@ -19,11 +19,11 @@ export def run [
 ]: nothing -> nothing {
   let repo_root = (($directory | default ".") | path expand --no-symlink)
 
-  if (($shell | describe) != 'string') and ($command | is-empty) {
+  if not (is-string $shell) and ($command | is-empty) {
     fail (usage)
   }
 
-  if (($shell | describe) == 'string') and not ($command | is-empty) {
+  if (is-string $shell) and ($command | is-not-empty) {
     fail "--shell cannot be combined with a direct command invocation"
   }
 
@@ -34,11 +34,11 @@ export def run [
   let bootstrap_status = bootstrap $repo_root
   let shell_script = ($bootstrap_status | get shell_export_path)
 
-  if (($shell_script | describe) != 'string') or ($shell_script | is-empty) {
+  if not (is-non-empty-string $shell_script) {
     fail $"expected devenv shell export under (($repo_root | path join '.devenv'))"
   }
 
-  if (($shell | describe) == 'string') {
+  if (is-string $shell) {
     run-in-shell-export $shell_script --shell-command $shell
   } else {
     run-in-shell-export $shell_script ...$command

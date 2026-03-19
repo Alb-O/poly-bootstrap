@@ -1,4 +1,4 @@
-use ../support.nu [fail]
+use ../support.nu [fail is-string]
 use manifest.nu [find-polyrepo-root load-manifest manifest-path resolve-repo-path]
 use resolve.nu [validate-model]
 
@@ -10,7 +10,7 @@ export def check [target_path?: path]: nothing -> record {
     find-polyrepo-root $start_path
   }
 
-  if (($polyrepo_root | describe) != 'string') {
+  if not (is-string $polyrepo_root) {
     fail $"polyrepo root could not be inferred from ($start_path)"
   }
 

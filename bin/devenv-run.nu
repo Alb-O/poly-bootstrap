@@ -1,17 +1,18 @@
 #!/usr/bin/env nu
 
 use ../nu/polyrepo/devenv_run.nu *
+use ../nu/support.nu [is-nothing is-string]
 
 def main [
   --directory(-C): path
   --shell(-s): string
   ...command: string
 ] {
-  if (($shell | describe) == 'string') and (($directory | describe) != 'nothing') {
+  if (is-string $shell) and not (is-nothing $directory) {
     run --directory $directory --shell $shell ...$command
-  } else if (($shell | describe) == 'string') {
+  } else if (is-string $shell) {
     run --shell $shell ...$command
-  } else if (($directory | describe) != 'nothing') {
+  } else if not (is-nothing $directory) {
     run --directory $directory ...$command
   } else {
     run ...$command

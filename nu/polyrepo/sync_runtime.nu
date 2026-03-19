@@ -1,4 +1,4 @@
-use ../support.nu [fail sort-record]
+use ../support.nu [fail is-record is-string sort-record]
 use manifest.nu [get-import-input-name parse-yaml-mapping]
 use resolve.nu [resolve-target resolve-target-layer-spec]
 
@@ -39,17 +39,17 @@ def render-target-overrides [model: record target_kind: string target_name: any]
 
     $visited_inputs = ($visited_inputs | append $input_name)
     let input_entry = ($model.inputs | get -o $input_name)
-    if (($input_entry | describe) !~ '^record') {
+    if not (is-record $input_entry) {
       fail $"unknown input '($input_name)'"
     }
 
     let local_repo = ($input_entry | get localRepo)
-    if (($local_repo | describe) != 'string') {
+    if not (is-string $local_repo) {
       continue
     }
 
     let repo_path = ($repo_paths | get -o $local_repo)
-    if (($repo_path | describe) != 'string') {
+    if not (is-string $repo_path) {
       fail $"input '($input_name)' maps to unknown local repo '($local_repo)'"
     }
 
@@ -104,7 +104,7 @@ def lock-status [output_path: path lock_path: path]: nothing -> record {
   let local_doc = parse-yaml-mapping $output_path (open --raw $output_path)
   let desired_inputs = ($local_doc | get -o inputs | default {})
 
-  if (($desired_inputs | describe) !~ '^record') {
+  if not (is-record $desired_inputs) {
     fail $"expected `inputs` to be a mapping in ($output_path)"
   }
 
@@ -123,7 +123,7 @@ def lock-status [output_path: path lock_path: path]: nothing -> record {
   }
   let root_name = ($lock_doc | get -o root)
   let nodes = ($lock_doc | get -o nodes | default {})
-  let root_node = if (($root_name | describe) == 'string') and ($root_name in ($nodes | columns)) {
+  let root_node = if (is-string $root_name) and ($root_name in ($nodes | columns)) {
     $nodes | get $root_name
   } else {
     {}
@@ -138,14 +138,14 @@ def lock-status [output_path: path lock_path: path]: nothing -> record {
     let input_spec = ($desired_inputs | get $input_name)
     let url = ($input_spec | get -o url)
     let locked_name = ($root_inputs | get $input_name)
-    let locked_node = if (($locked_name | describe) == 'string') and ($locked_name in ($nodes | columns)) {
+    let locked_node = if (is-string $locked_name) and ($locked_name in ($nodes | columns)) {
       $nodes | get $locked_name
     } else {
       {}
     }
     let locked_original = ($locked_node | get -o original)
 
-    if (($url | describe) == 'string') and (($locked_original | describe) == 'string') and ($locked_original != $url) {
+    if (is-string $url) and (is-string $locked_original) and ($locked_original != $url) {
       return (make-lock-status "stale-root-input" $input_name)
     }
   }
@@ -166,7 +166,7 @@ export def sync [target_path?: path]: nothing -> record {
   mut mode = "unchanged"
 
   if $overrides_text == "" {
-    if (($existing_text | describe) == 'string') {
+    if (is-string $existing_text) {
       rm --force $output_path
       $mode = "removed"
     }

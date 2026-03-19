@@ -2,6 +2,26 @@ export def fail [message: string]: nothing -> error {
   error make --unspanned $message
 }
 
+export def is-record [value: any]: nothing -> bool {
+  ($value | describe) =~ '^record'
+}
+
+export def is-list [value: any]: nothing -> bool {
+  ($value | describe) =~ '^list'
+}
+
+export def is-string [value: any]: nothing -> bool {
+  ($value | describe) == 'string'
+}
+
+export def is-nothing [value: any]: nothing -> bool {
+  ($value | describe) == 'nothing'
+}
+
+export def is-non-empty-string [value: any]: nothing -> bool {
+  (is-string $value) and ($value | is-not-empty)
+}
+
 export def polyrepo-manifest-basename []: nothing -> string {
   "polyrepo.nuon"
 }
