@@ -39,8 +39,8 @@ export def run [
   }
 
   if (is-string $shell) {
-    run-in-shell-export $shell_script --shell-command $shell
+    run-in-shell-export $repo_root $shell_script --shell-command $shell
   } else {
-    run-in-shell-export $shell_script ...$command
+    run-in-shell-export $repo_root $shell_script ...$command
   }
 }

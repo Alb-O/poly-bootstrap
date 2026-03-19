@@ -249,6 +249,7 @@ export def shell-export-prefix-text [shell_script: path]: nothing -> string {
 }
 
 export def run-in-shell-export [
+  repo_root: path
   shell_script: path
   --shell-command(-s): string
   ...command: string
@@ -260,6 +261,7 @@ export def run-in-shell-export [
       "set -euo pipefail"
       'export PS1=""'
       $prefix_text
+      'cd "$AR_REPO_ROOT"'
       'exec bash -lc "$AR_SHELL_COMMAND"'
     ] | str join "\n"
   } else {
@@ -268,15 +270,21 @@ export def run-in-shell-export [
       "set -euo pipefail"
       'export PS1=""'
       $prefix_text
+      'cd "$AR_REPO_ROOT"'
       'exec "$@"'
     ] | str join "\n"
   }
 
   if (is-string $shell_command) {
-    with-env { AR_SHELL_COMMAND: $shell_command } {
+    with-env {
+      AR_REPO_ROOT: $repo_root
+      AR_SHELL_COMMAND: $shell_command
+    } {
       $script_text | ^bash -s
     }
   } else {
-    $script_text | ^bash -s -- ...$command
+    with-env { AR_REPO_ROOT: $repo_root } {
+      $script_text | ^bash -s -- ...$command
+    }
   }
 }
