@@ -363,17 +363,66 @@ export def run [
     ^rm -rf $hook_tmpdir
   }
 
-  let commit_hidden_paths = (staged-nested-gitlink-paths $repo_path $selection.files)
+  let commit_tmpdir = (^mktemp -d | str trim)
+  let selected_patch_path = [$commit_tmpdir "selected.patch"] | path join
+  let temp_index = [$commit_tmpdir "index"] | path join
+  let selected_patch = (git-complete $repo_path ([diff --cached --binary --] ++ $selection.files))
 
-  if ($commit_hidden_paths | is-empty) {
-    ^git -C $repo_path commit --only --no-verify -m $commit_message -- ...$selection.files
-    return
+  if $selected_patch.exit_code != 0 {
+    ^rm -rf $commit_tmpdir
+    emit-command-output $selected_patch
+    exit $selected_patch.exit_code
   }
 
-  let commit_tmpdir = (^mktemp -d | str trim)
-  let hidden_paths = (hide-worktree-paths $commit_hidden_paths $commit_tmpdir)
-  let commit_result = (do { ^git -C $repo_path commit --only --no-verify -m $commit_message -- ...$selection.files } | complete)
-  restore-worktree-paths $hidden_paths
+  if ($selected_patch.stdout | is-empty) {
+    ^rm -rf $commit_tmpdir
+    exit-with-message "No selected staged changes to commit." 1
+  }
+
+  $selected_patch.stdout | save -f --raw $selected_patch_path
+
+  let has_head = ((git-complete $repo_path [rev-parse --verify HEAD]).exit_code == 0)
+  if $has_head {
+    let read_tree_result = (
+      do {
+        cd $repo_path
+        with-env { GIT_INDEX_FILE: $temp_index } {
+          ^git read-tree HEAD
+        }
+      } | complete
+    )
+
+    if $read_tree_result.exit_code != 0 {
+      ^rm -rf $commit_tmpdir
+      emit-command-output $read_tree_result
+      exit $read_tree_result.exit_code
+    }
+  }
+
+  let apply_result = (
+    do {
+      cd $repo_path
+      with-env { GIT_INDEX_FILE: $temp_index } {
+        ^git apply --cached --binary $selected_patch_path
+      }
+    } | complete
+  )
+
+  if $apply_result.exit_code != 0 {
+    ^rm -rf $commit_tmpdir
+    emit-command-output $apply_result
+    exit $apply_result.exit_code
+  }
+
+  let commit_result = (
+    do {
+      cd $repo_path
+      with-env { GIT_INDEX_FILE: $temp_index } {
+        ^git commit --no-verify -m $commit_message
+      }
+    } | complete
+  )
+
   ^rm -rf $commit_tmpdir
   emit-command-output $commit_result
 
