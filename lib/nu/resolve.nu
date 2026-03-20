@@ -1,4 +1,4 @@
-use ../support.nu [fail is-record is-string]
+use support.nu [fail is-record is-string]
 use manifest.nu [
   append-error
   describe-repo-list

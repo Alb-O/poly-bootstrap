@@ -1,8 +1,8 @@
-use ../support.nu [fail is-record]
-use common.nu [ensure-shell-export]
+use support.nu [fail is-record]
+use shell_export.nu [ensure-shell-export]
 use manifest.nu [is-bootstrap-target]
 use resolve.nu [resolve-target]
-use sync_runtime.nu [sync]
+use sync.nu *
 
 def run-bootstrap-task [
   repo_root: path
@@ -147,7 +147,7 @@ def bootstrap-target [target: record<agentroots_root: path, model: record, targe
   }
 }
 
-export def bootstrap [target_path?: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, dependency_repos: list<string>, dependency_results: list<record>, sync: record, bootstrap_tasks: list<record<task: string, ran: bool>>, lock_refreshed: bool, shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
+export def main [target_path?: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, dependency_repos: list<string>, dependency_results: list<record>, sync: record, bootstrap_tasks: list<record<task: string, ran: bool>>, lock_refreshed: bool, shell_export_path: path, shell_export_refreshed: bool, shell_export_reason: string> {
   bootstrap-target (resolve-target ($target_path | default "."))
 }
 

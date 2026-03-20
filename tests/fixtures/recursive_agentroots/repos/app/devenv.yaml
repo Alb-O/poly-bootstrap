@@ -6,5 +6,5 @@ inputs:
     url: github:Alb-O/not-local
     flake: false
 imports:
-  - agentroots/tooling
+  - agentroots/module
   - remote-only

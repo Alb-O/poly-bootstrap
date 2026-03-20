@@ -1,8 +1,8 @@
 #!/usr/bin/env nu
 
-use ../nu/tooling/committer.nu [run]
+use ../lib/nu/committer.nu [run]
 
-def main [
+def --wrapped main [
   repo_path: path
   commit_message: string
   ...file_or_glob: string

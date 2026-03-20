@@ -1,4 +1,4 @@
-use ../support.nu [
+use support.nu [
   fail
   is-list
   is-non-empty-string

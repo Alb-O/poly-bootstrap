@@ -2,7 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-nu_script="$script_dir/bin/agentroots.nu"
+nu_script="$script_dir/cli/agentroots.nu"
 
 if command -v nu >/dev/null 2>&1; then
   exec nu "$nu_script" bootstrap "$@"

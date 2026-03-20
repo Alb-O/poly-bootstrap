@@ -1,4 +1,4 @@
-use ../support.nu [fail is-record is-string sort-record]
+use support.nu [fail is-record is-string sort-record]
 use manifest.nu [get-import-input-name parse-yaml-mapping]
 use resolve.nu [resolve-target resolve-target-layer-spec]
 
@@ -214,6 +214,6 @@ def sync-target [
   }
 }
 
-export def sync [target_path?: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, output_path: path, mode: string, changed: bool, removed: bool, local_repo_names: list<string>, local_repo_roots: list<string>, local_repo_count: int, lock_status: record<status: string, clean: bool, input_name: oneof<string, nothing>>, lock_refresh_needed: bool> {
+export def main [target_path?: path]: nothing -> record<target_root: path, target_kind: string, target_name: oneof<string, nothing>, output_path: path, mode: string, changed: bool, removed: bool, local_repo_names: list<string>, local_repo_roots: list<string>, local_repo_count: int, lock_status: record<status: string, clean: bool, input_name: oneof<string, nothing>>, lock_refresh_needed: bool> {
   sync-target (resolve-target ($target_path | default "."))
 }

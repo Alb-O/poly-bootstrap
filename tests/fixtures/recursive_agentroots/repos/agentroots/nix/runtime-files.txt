@@ -1,0 +1,16 @@
+cli/agentroots.nu
+cli/committer.nu
+cli/devenv-run.nu
+lib/nu/support.nu
+lib/nu/bootstrap.nu
+lib/nu/check.nu
+lib/nu/committer.nu
+lib/nu/devenv_run.nu
+lib/nu/manifest.nu
+lib/nu/mod.nu
+lib/nu/resolve.nu
+lib/nu/shell_export.nu
+lib/nu/sync.nu
+module/default.nix
+module/devenv.nix
+nix/package-tools.nix

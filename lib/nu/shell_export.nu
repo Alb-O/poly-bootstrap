@@ -1,4 +1,37 @@
-use ../support.nu [fail is-non-empty-string is-record is-string]
+use support.nu [fail is-non-empty-string is-record is-string]
+
+def runtime-manifest-path [agentroots_root: path]: nothing -> path {
+  ($agentroots_root | path join "nix" | path join "runtime-files.txt")
+}
+
+def runtime-files [agentroots_root: path]: nothing -> list<string> {
+  let manifest_path = (runtime-manifest-path $agentroots_root)
+  if not ($manifest_path | path exists) {
+    fail $"expected AgentRoots runtime manifest at ($manifest_path)"
+  }
+
+  let listed_paths = (
+    open --raw $manifest_path
+    | lines
+    | each {|line| $line | str trim }
+    | where {|line| $line != "" and not ($line | str starts-with "#") }
+  )
+
+  for rel_path in $listed_paths {
+    let tracked_path = ($agentroots_root | path join $rel_path)
+    if not ($tracked_path | path exists) {
+      fail (
+        "runtime manifest entry missing from AgentRoots input: "
+        + $rel_path
+        + " (manifest="
+        + ($manifest_path | into string)
+        + ")"
+      )
+    }
+  }
+
+  $listed_paths
+}
 
 export def latest-shell-export [repo_root: path]: nothing -> oneof<path, nothing> {
   let shell_glob = (($repo_root | path join ".devenv") | path join "shell-*.sh")
@@ -84,21 +117,7 @@ export def shell-export-fingerprint [repo_root: path]: nothing -> string {
     }
 
     if $input_entry.name == "agentroots" {
-      for rel_path in [
-        "bin/devenv-run.nu"
-        "bin/agentroots.nu"
-        "nu/support.nu"
-        "nu/agentroots/bootstrap_runtime.nu"
-        "nu/agentroots/check_runtime.nu"
-        "nu/agentroots/common.nu"
-        "nu/agentroots/devenv_run.nu"
-        "nu/agentroots/manifest.nu"
-        "nu/agentroots/mod.nu"
-        "nu/agentroots/resolve.nu"
-        "nu/agentroots/sync_runtime.nu"
-        "tooling/default.nix"
-        "tooling/devenv.nix"
-      ] {
+      for rel_path in (runtime-files $input_entry.repo_root) {
         $lines = ($lines | append (shell-export-file-stat-line $"input:($input_entry.name):($rel_path)" ($input_entry.repo_root | path join $rel_path)))
       }
     }

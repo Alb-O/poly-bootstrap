@@ -1,8 +1,8 @@
-use bootstrap_runtime.nu [bootstrap]
-use ../support.nu [fail is-non-empty-string is-string]
-use common.nu [run-in-shell-export]
+use bootstrap.nu *
+use support.nu [fail is-non-empty-string is-string]
+use shell_export.nu [run-in-shell-export]
 
-def usage []: nothing -> string {
+export def usage []: nothing -> string {
   [
     "Usage: devenv-run [-C repo_root] [--shell '<command>'] [--] <command> [args...]"
     ""
