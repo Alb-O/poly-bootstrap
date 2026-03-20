@@ -545,6 +545,46 @@ let
         type -P agentroots > "$REPORT_DIR/agentroots-path.txt"
         "${agentrootsPackage}/bin/agentroots" bootstrap "$out/repos/app" --json > "$out/status.json"
       '';
+
+  runPackagedCommitter =
+    {
+      derivationNamePrefix,
+      committerPackage,
+    }:
+    pkgs.runCommand derivationNamePrefix
+      {
+        nativeBuildInputs = [
+          pkgs.git
+          pkgs.nushell
+        ];
+      }
+      ''
+        mkdir -p "$out/repo" "$out/report"
+        cd "$out/repo"
+        git init -q
+        git config user.name "AgentRoots Test"
+        git config user.email "agentroots@example.test"
+        printf 'alpha\n' > note.txt
+        printf 'seed\n' > note-second.txt
+        git add note.txt
+        git add note-second.txt
+        git commit -q -m 'chore(test): seed repo'
+        printf 'beta\n' >> note.txt
+        printf 'delta\n' >> note-second.txt
+
+        export PATH="${committerPackage}/bin:$PATH"
+        type -P committer > "$out/report/committer-path.txt"
+        (
+          cd "$out/repo"
+          committer $'feat(test): commit selected change\n\n- include note' note.txt > "$out/report/commit-output.txt"
+        )
+        committer -C "$out/repo" $'feat(test): commit second change\n\n- include note-second' note-second.txt > "$out/report/commit-output-second.txt"
+
+        git -C "$out/repo" log -1 --pretty=%B > "$out/report/commit-message.txt"
+        git -C "$out/repo" diff-tree --no-commit-id --name-only -r HEAD > "$out/report/committed-files.txt"
+        git -C "$out/repo" log -1 --skip=1 --pretty=%B > "$out/report/commit-message-previous.txt"
+        git -C "$out/repo" diff-tree --no-commit-id --name-only -r HEAD~1 > "$out/report/committed-files-previous.txt"
+      '';
 in
 {
   inherit
@@ -559,6 +599,7 @@ in
     runBootstrapJsonTwice
     runCheckJson
     runPackagedAgentroots
+    runPackagedCommitter
     runPackagedRun
     runSync
     runSyncFailure

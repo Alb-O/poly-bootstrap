@@ -17,6 +17,7 @@ let
     readJson
     runtimeFixture
     runPackagedAgentroots
+    runPackagedCommitter
     ;
 in
 {
@@ -62,6 +63,32 @@ in
       && status.target_name == "app"
       && status.shell_export_refreshed == true
       && shellExportLog == [ "${run}/repos/app" ];
+    expected = true;
+  };
+
+  localInputOverrides."test packaged committer defaults to pwd and accepts -C" = {
+    expr =
+      let
+        sourceTree = runtimeFixture "ar_packaged_committer_source";
+        result = evalSharedModule {
+          root = sourceTree;
+          pkgsForTooling = pkgsWithFakeDevenv;
+        };
+        run = runPackagedCommitter {
+          derivationNamePrefix = "ar_packaged_committer_run";
+          committerPackage = result.config.outputs.committer;
+        };
+      in
+      builtins.readFile "${run}/report/committer-path.txt"
+      == "${result.config.outputs.committer}/bin/committer\n"
+      &&
+        builtins.readFile "${run}/report/commit-message.txt"
+        == "feat(test): commit second change\n\n- include note-second\n\n"
+      && builtins.readFile "${run}/report/committed-files.txt" == "note-second.txt\n"
+      &&
+        builtins.readFile "${run}/report/commit-message-previous.txt"
+        == "feat(test): commit selected change\n\n- include note\n\n"
+      && builtins.readFile "${run}/report/committed-files-previous.txt" == "note.txt\n";
     expected = true;
   };
 
