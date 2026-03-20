@@ -35,78 +35,26 @@ let
       exec ${lib.getExe pkgs.nushell} ${toolingSource}/bin/committer.nu "$@"
     '';
   };
-  devenvRun = pkgs.writeShellApplication {
-    name = "devenv-run";
-    runtimeInputs = [
-      pkgs.bash
-      pkgs.coreutils
-      pkgs.devenv
-      pkgs.nushell
-    ];
-    text = ''
-            repo_root=$(pwd)
-            shell_command=""
-
-            usage() {
-              cat <<'EOF'
-      Usage: devenv-run [-C repo_root] [--shell '<command>'] [--] <command> [args...]
-
-      Run a command inside a repo's generated devenv environment without executing
-      the repo's shellHook / enterShell tasks during steady-state reuse. On first use,
-      it may materialize a shell export so later runs can stay side-effect-light.
-      EOF
-            }
-
-            while [[ $# -gt 0 ]]; do
-              case "$1" in
-                -C)
-                  if [[ $# -lt 2 ]]; then
-                    echo "Missing value for -C" >&2
-                    exit 2
-                  fi
-                  repo_root=$2
-                  shift 2
-                  ;;
-                -s|--shell)
-                  if [[ $# -lt 2 ]]; then
-                    echo "Missing value for $1" >&2
-                    exit 2
-                  fi
-                  shell_command=$2
-                  shift 2
-                  ;;
-                -h|--help)
-                  usage
-                  exit 0
-                  ;;
-                --)
-                  shift
-                  break
-                  ;;
-                *)
-                  break
-                  ;;
-              esac
-            done
-
-            if [[ -n "$shell_command" ]]; then
-              if [[ $# -gt 0 ]]; then
-                echo "--shell cannot be combined with a direct command invocation" >&2
-                exit 2
-              fi
-
-              exec ${lib.getExe pkgs.nushell} ${toolingSource}/bin/devenv-run.nu -C "$repo_root" --shell "$shell_command"
-            fi
-
-            if [[ $# -eq 0 ]]; then
-              exec ${lib.getExe pkgs.nushell} ${toolingSource}/bin/devenv-run.nu -C "$repo_root"
-            fi
-
-            quoted_command=$(printf '%q ' "$@")
-            quoted_command=''${quoted_command% }
-            exec ${lib.getExe pkgs.nushell} ${toolingSource}/bin/devenv-run.nu -C "$repo_root" --shell "$quoted_command"
-    '';
-  };
+  devenvRun =
+    pkgs.writers.writeNuBin "devenv-run"
+      {
+        makeWrapperArgs = [
+          "--prefix"
+          "PATH"
+          ":"
+          (lib.makeBinPath [
+            pkgs.bash
+            pkgs.coreutils
+            pkgs.devenv
+            pkgs.nushell
+          ])
+        ];
+      }
+      ''
+        def --wrapped main [...rest: string] {
+          exec ${lib.getExe pkgs.nushell} ${toolingSource}/bin/devenv-run.nu ...$rest
+        }
+      '';
 in
 {
   config = lib.mkMerge [

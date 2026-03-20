@@ -3,7 +3,7 @@
 use ../nu/agentroots/devenv_run.nu *
 use ../nu/support.nu [is-nothing is-string]
 
-def main [
+def --wrapped main [
   --directory(-C): path
   --shell(-s): string
   ...command: string
