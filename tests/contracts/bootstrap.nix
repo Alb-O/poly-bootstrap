@@ -187,7 +187,7 @@ in
             targetRoot = "$out/repos/agentroots";
           };
           betweenRuns = ''
-            printf '\n# changed\n' >> "$out/repos/agentroots/cli/devenv-run.nu"
+            printf '\n# changed\n' >> "$out/repos/agentroots/cli/run.nu"
           '';
         };
         secondStatus = readJson "${output}/second-status.json";

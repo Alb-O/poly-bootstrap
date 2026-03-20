@@ -9,7 +9,7 @@ export use check.nu *
 export module bootstrap.nu
 export module check.nu
 export module committer.nu
-export module devenv_run.nu
+export module run.nu
 export module manifest.nu
 export module resolve.nu
 export module shell_export.nu

@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 
-use ../lib/nu/devenv_run.nu *
+use ../lib/nu/run.nu *
 use ../lib/nu/support.nu [is-nothing is-string]
 
 def --wrapped main [
@@ -15,12 +15,12 @@ def --wrapped main [
   }
 
   if (is-string $shell) and not (is-nothing $directory) {
-    run --directory $directory --shell $shell ...$command
+    run-command --directory $directory --shell $shell ...$command
   } else if (is-string $shell) {
-    run --shell $shell ...$command
+    run-command --shell $shell ...$command
   } else if not (is-nothing $directory) {
-    run --directory $directory ...$command
+    run-command --directory $directory ...$command
   } else {
-    run ...$command
+    run-command ...$command
   }
 }

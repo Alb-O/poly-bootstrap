@@ -31,9 +31,9 @@ let
       pkgs.prek
     ];
   };
-  devenvRun = packageTools.makeNuCli {
-    name = "devenv-run";
-    entrypoint = "cli/devenv-run.nu";
+  runCli = packageTools.makeNuCli {
+    name = "run";
+    entrypoint = "cli/run.nu";
     runtimeInputs = [
       pkgs.bash
       pkgs.coreutils
@@ -47,12 +47,12 @@ in
       packages = [
         agentroots
         committer
-        devenvRun
+        runCli
       ];
 
       outputs.agentroots = agentroots;
       outputs.committer = committer;
-      outputs.devenv-run = devenvRun;
+      outputs.run = runCli;
     }
     (lib.optionalAttrs (options ? instructions && options.instructions ? instructions) {
       instructions.instructions = lib.mkOrder 300 [ (builtins.readFile ./AGENTS.md) ];

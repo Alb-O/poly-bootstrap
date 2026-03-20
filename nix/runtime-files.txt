@@ -1,11 +1,11 @@
 cli/agentroots.nu
 cli/committer.nu
-cli/devenv-run.nu
+cli/run.nu
 lib/nu/support.nu
 lib/nu/bootstrap.nu
 lib/nu/check.nu
 lib/nu/committer.nu
-lib/nu/devenv_run.nu
+lib/nu/run.nu
 lib/nu/manifest.nu
 lib/nu/mod.nu
 lib/nu/resolve.nu

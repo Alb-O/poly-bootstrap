@@ -184,7 +184,7 @@ let
     }:
     let
       runtimeManifestLines = ''
-        cli/devenv-run.nu
+        cli/run.nu
         lib/nu/shell_export.nu
         module/default.nix
         module/devenv.nix
@@ -193,7 +193,7 @@ let
     in
     ''
       mkdir -p "${targetRoot}/cli" "${targetRoot}/lib/nu" "${targetRoot}/module" "${targetRoot}/nix"
-      cat > "${targetRoot}/cli/devenv-run.nu" <<'EOF'
+      cat > "${targetRoot}/cli/run.nu" <<'EOF'
       echo initial
       EOF
       cat > "${targetRoot}/lib/nu/shell_export.nu" <<'EOF'
@@ -204,7 +204,7 @@ let
       EOF
       ${lib.optionalString includeModuleAgents ''
         cat > "${targetRoot}/module/AGENTS.md" <<'EOF'
-        ## devenv-run
+        ## run
         example
         EOF
       ''}
@@ -481,11 +481,11 @@ let
       script = ":";
     };
 
-  runPackagedDevenvRun =
+  runPackagedRun =
     {
       derivationNamePrefix,
       sourceTree,
-      devenvRunPackage,
+      runPackage,
     }:
     pkgs.runCommand derivationNamePrefix
       {
@@ -514,9 +514,9 @@ let
         export BOOTSTRAP_LOG="$out/bootstrap.log"
         export DEVENV_FILES_LOG="$out/devenv-files.log"
         export SHELL_EXPORT_LOG="$out/shell-export.log"
-        export PATH="${devenvRunPackage}/bin:$PATH"
-        "${devenvRunPackage}/bin/devenv-run" -C "$out/repos/app" --shell \
-          'type -P devenv-run > "$REPORT_DIR/devenv-run-path.txt"; printf "%s\n" "''${DEVENV_FAKE:-}" > "$REPORT_DIR/devenv-fake.txt"'
+        export PATH="${runPackage}/bin:$PATH"
+        "${runPackage}/bin/run" -C "$out/repos/app" --shell \
+          'type -P run > "$REPORT_DIR/run-path.txt"; printf "%s\n" "''${DEVENV_FAKE:-}" > "$REPORT_DIR/devenv-fake.txt"'
       '';
 
   runPackagedAgentroots =
@@ -559,7 +559,7 @@ in
     runBootstrapJsonTwice
     runCheckJson
     runPackagedAgentroots
-    runPackagedDevenvRun
+    runPackagedRun
     runSync
     runSyncFailure
     runSyncJson

@@ -4,7 +4,7 @@ AgentRoots bootstrap, runtime, CLI, and consumer-module tooling for this workspa
 
 Ownership:
 
-- `agentroots` owns bootstrap, shell export reuse, `agentroots`, `devenv-run`, `committer`, and the `agentroots/module` consumer module.
+- `agentroots` owns bootstrap, shell export reuse, `agentroots`, `run`, `committer`, and the `agentroots/module` consumer module.
 
 Responsibilities:
 
@@ -13,12 +13,12 @@ Responsibilities:
 - bootstrap manifest-declared dependency repos
 - run manifest-declared bootstrap tasks such as `devenv:files`
 - refresh the target repo lock/export state when needed
-- package `agentroots`, `devenv-run`, and `committer` for consumers via `agentroots/module`
+- package `agentroots`, `run`, and `committer` for consumers via `agentroots/module`
 
 ## Public Interface
 
 - CLI: `cli/agentroots.nu`
-- CLI: `cli/devenv-run.nu`
+- CLI: `cli/run.nu`
 - Wrapper entrypoint: `bootstrap`
 - Consumer module: `module/default.nix`
 
@@ -42,7 +42,7 @@ Nu module layout:
 - `lib/nu/bootstrap.nu`
 - `lib/nu/check.nu`
 - `lib/nu/shell_export.nu`
-- `lib/nu/devenv_run.nu`
+- `lib/nu/run.nu`
 
 Consumer imports are explicit:
 
@@ -76,7 +76,7 @@ Key rules:
 - `bootstrap --all-repos` targets only repos that expose `devenv.yaml` or `devenv.nix`.
 - The root workspace is first-class. `check .`, `sync .`, and `bootstrap .` work from the AgentRoots root directly.
 - `.agentroots_direnvrc` is only a shell bridge for direnv and calls `repos/agentroots/bootstrap`.
-- `cli/devenv-run.nu` is the canonical command source packaged by `module/default.nix`.
+- `cli/run.nu` is the canonical command source packaged by `module/default.nix`.
 - manifest parsing and catalog normalization live in `lib/nu/manifest.nu`.
 - target resolution and validation live in `lib/nu/resolve.nu`.
 - sync/bootstrap/check commands are split across `lib/nu/sync.nu`, `lib/nu/bootstrap.nu`, and `lib/nu/check.nu`.
@@ -94,5 +94,5 @@ Key rules:
 Inside this repo:
 
 ```bash
-devenv-run -C . --shell 'run-nix-tests'
+run -C . --shell 'run-nix-tests'
 ```

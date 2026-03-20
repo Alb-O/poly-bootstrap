@@ -32,7 +32,7 @@ lib.foldl' lib.recursiveUpdate { } [
       repoRoot
       ;
   })
-  (import ./contracts/devenv_run.nix {
+  (import ./contracts/run.nix {
     inherit
       lib
       pkgs

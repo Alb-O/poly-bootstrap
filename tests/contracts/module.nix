@@ -20,7 +20,7 @@ let
     ;
 in
 {
-  localInputOverrides."test consumer module exposes agentroots committer and devenv-run from AgentRoots module" =
+  localInputOverrides."test consumer module exposes agentroots committer and run from AgentRoots module" =
     {
       expr =
         let
@@ -32,10 +32,10 @@ in
         in
         result.config.outputs ? agentroots
         && result.config.outputs ? committer
-        && result.config.outputs ? devenv-run
+        && result.config.outputs ? run
         && builtins.pathExists "${result.config.outputs.agentroots}/bin/agentroots"
         && builtins.pathExists "${result.config.outputs.committer}/bin/committer"
-        && builtins.pathExists "${result.config.outputs.devenv-run}/bin/devenv-run";
+        && builtins.pathExists "${result.config.outputs.run}/bin/run";
       expected = true;
     };
 

@@ -4,7 +4,7 @@ use shell_export.nu [run-in-shell-export]
 
 export def usage []: nothing -> string {
   [
-    "Usage: devenv-run [-C repo_root] [--shell '<command>'] [--] <command> [args...]"
+    "Usage: run [-C repo_root] [--shell '<command>'] [--] <command> [args...]"
     ""
     "Run a command inside a repo's generated devenv environment without executing"
     "the repo's shellHook / enterShell tasks during steady-state reuse. On first use,"
@@ -12,7 +12,7 @@ export def usage []: nothing -> string {
   ] | str join "\n"
 }
 
-export def run [
+export def run-command [
   --directory(-C): path
   --shell(-s): string
   ...command: string
