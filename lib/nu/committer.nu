@@ -1,5 +1,9 @@
 export def usage [cmd_name: string]: nothing -> string {
-  $"Usage: ($cmd_name) [-C repo-path] \"commit message\" <file-or-glob> [more files/globs...]"
+  [
+    $"Usage: ($cmd_name) [-C repo-path] \"commit message\" <file-or-glob> [more files/globs...]"
+    ""
+    "Relative file and glob patterns resolve from the repo selected by -C (or CWD if omitted)."
+  ] | str join "\n"
 }
 
 def print-stderr [text: string]: nothing -> nothing {

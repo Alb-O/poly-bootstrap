@@ -9,6 +9,8 @@ export def usage []: nothing -> string {
     "Run a command inside a repo's generated devenv environment without executing"
     "the repo's shellHook / enterShell tasks during steady-state reuse. On first use,"
     "it may materialize a shell export so later runs can stay side-effect-light."
+    ""
+    "The executed command runs from the repo selected by -C (or CWD if omitted)."
   ] | str join "\n"
 }
 
